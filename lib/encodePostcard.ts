@@ -4,19 +4,19 @@ export interface PostcardPayload {
   cardId: string;
   message: string;
   senderName: string;
-  image: string | null;
+  image: string | null;       // kept for backwards compat
+  images: string[];           // up to 15 compressed images
 }
 
 /**
- * Compress image to max 320px wide, JPEG at 40% quality.
- * This keeps the base64 output under ~30KB for most photos,
- * preventing 431 Request Header Fields Too Large errors.
+ * Compress image to max 280px, JPEG 35% — keeps each image ~10-15KB
+ * so 15 images stay well under URL limits.
  */
 export async function compressImage(dataUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 320;
+      const MAX = 280;
       let { width, height } = img;
       if (width > MAX || height > MAX) {
         const ratio = Math.min(MAX / width, MAX / height);
@@ -28,7 +28,7 @@ export async function compressImage(dataUrl: string): Promise<string> {
       canvas.height = height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.4));
+      resolve(canvas.toDataURL("image/jpeg", 0.35));
     };
     img.onerror = reject;
     img.src = dataUrl;
@@ -47,7 +47,10 @@ export function decodePayload(encoded: string): PostcardPayload | null {
   try {
     const b64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
     const json = decodeURIComponent(escape(atob(b64)));
-    return JSON.parse(json) as PostcardPayload;
+    const p = JSON.parse(json) as PostcardPayload;
+    // backcompat: if old payload has single image but no images array
+    if (!p.images) p.images = p.image ? [p.image] : [];
+    return p;
   } catch {
     return null;
   }

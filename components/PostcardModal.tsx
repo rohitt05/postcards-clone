@@ -12,8 +12,30 @@ interface Props {
 
 type Step = "compose" | "share";
 
+const MAX_IMAGES = 15;
+const MAX_MESSAGE = 1000;
+
+// Deterministic scattered positions for bg images
+const BG_SLOTS = [
+  { top: "4%",  left: "-6%",  rotate: -14, scale: 0.82 },
+  { top: "2%",  left: "28%",  rotate:   6, scale: 0.76 },
+  { top: "1%",  right: "-4%", rotate:  13, scale: 0.80 },
+  { top: "28%", left: "-8%",  rotate:  -8, scale: 0.78 },
+  { top: "30%", right: "-7%", rotate:  10, scale: 0.75 },
+  { top: "55%", left: "-5%",  rotate: -12, scale: 0.80 },
+  { top: "58%", right: "-6%", rotate:   9, scale: 0.77 },
+  { top: "72%", left: "20%",  rotate:  -5, scale: 0.74 },
+  { top: "75%", right: "18%", rotate:  15, scale: 0.79 },
+  { top: "80%", left: "-4%",  rotate:  -9, scale: 0.76 },
+  { top: "5%",  left: "55%",  rotate: -11, scale: 0.73 },
+  { top: "45%", left: "38%",  rotate:   7, scale: 0.71 },
+  { top: "62%", left: "52%",  rotate: -16, scale: 0.75 },
+  { top: "18%", left: "14%",  rotate:  12, scale: 0.72 },
+  { top: "88%", right: "-3%", rotate:  -7, scale: 0.74 },
+];
+
 export default function PostcardModal({ card, onClose }: Props) {
-  const [image, setImage] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [message, setMessage] = useState("");
   const [senderName, setSenderName] = useState("");
@@ -25,38 +47,45 @@ export default function PostcardModal({ card, onClose }: Props) {
   const [nameTouched, setNameTouched] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const MAX_MESSAGE = 1000;
+  const canGenerate = senderName.trim().length > 0 && (message.trim().length > 0 || images.length > 0);
+  const showNameError = nameTouched && !senderName.trim();
 
-  // Button is disabled unless sender name is filled AND at least message or image exists
-  const canGenerate = senderName.trim().length > 0 && (message.trim().length > 0 || !!image);
-
-  const handleFile = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => setImage(e.target?.result as string);
-    reader.readAsDataURL(file);
+  const handleFiles = useCallback((files: FileList | File[]) => {
+    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
+    arr.forEach(file => {
+      setImages(prev => {
+        if (prev.length >= MAX_IMAGES) return prev;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setImages(p => p.length < MAX_IMAGES ? [...p, e.target?.result as string] : p);
+        };
+        reader.readAsDataURL(file);
+        return prev;
+      });
+    });
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+    handleFiles(e.dataTransfer.files);
+  }, [handleFiles]);
+
+  const removeImage = (idx: number) => setImages(p => p.filter((_, i) => i !== idx));
 
   const handleSend = async () => {
     if (!card || !canGenerate) return;
     setLoading(true);
     try {
-      const compressed = image ? await compressImage(image) : null;
+      const compressed = await Promise.all(images.map(compressImage));
       const encoded = encodePayload({
         cardId: card.id,
         message,
         senderName: senderName.trim(),
-        image: compressed,
+        image: compressed[0] ?? null,
+        images: compressed,
       });
-      const url = `${window.location.origin}/view?p=${encoded}`;
-      setShareUrl(url);
+      setShareUrl(`${window.location.origin}/view?p=${encoded}`);
       setStep("share");
     } finally {
       setLoading(false);
@@ -71,7 +100,7 @@ export default function PostcardModal({ card, onClose }: Props) {
   };
 
   const handleClose = () => {
-    setImage(null);
+    setImages([]);
     setMessage("");
     setSenderName("");
     setStep("compose");
@@ -87,7 +116,6 @@ export default function PostcardModal({ card, onClose }: Props) {
 
   const accent = card.textColor;
   const bg = card.bg;
-  const showNameError = nameTouched && !senderName.trim();
 
   return (
     <AnimatePresence>
@@ -101,8 +129,40 @@ export default function PostcardModal({ card, onClose }: Props) {
             exit={{ opacity: 0 }}
             onClick={handleClose}
             className="fixed inset-0 z-40"
-            style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
+            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(10px)" }}
           />
+
+          {/* Scattered background images */}
+          <div className="fixed inset-0 z-40 pointer-events-none overflow-hidden">
+            <AnimatePresence>
+              {images.map((src, i) => {
+                const slot = BG_SLOTS[i % BG_SLOTS.length];
+                return (
+                  <motion.div
+                    key={src.slice(-20) + i}
+                    initial={{ opacity: 0, scale: 0.6, rotate: (slot.rotate ?? 0) - 10 }}
+                    animate={{ opacity: 1, scale: slot.scale, rotate: slot.rotate }}
+                    exit={{ opacity: 0, scale: 0.5 }}
+                    transition={{ type: "spring", stiffness: 260, damping: 22, delay: i * 0.06 }}
+                    style={{
+                      position: "absolute",
+                      width: 160,
+                      height: 120,
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+                      transformOrigin: "center center",
+                      ...(slot.top    ? { top:    slot.top    } : {}),
+                      ...(slot.left   ? { left:   slot.left   } : {}),
+                      ...(slot.right  ? { right:  slot.right  } : {}),
+                    }}
+                  >
+                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
 
           {/* Modal */}
           <motion.div
@@ -119,7 +179,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                 maxWidth: 440,
                 borderRadius: 32,
                 background: bg,
-                boxShadow: "0 8px 48px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.1)",
+                boxShadow: "0 8px 48px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.1)",
                 overflow: "hidden",
                 maxHeight: "90dvh",
                 overflowY: "auto",
@@ -127,7 +187,7 @@ export default function PostcardModal({ card, onClose }: Props) {
             >
               <AnimatePresence mode="wait">
 
-                {/* ── COMPOSE STEP ── */}
+                {/* ── COMPOSE ── */}
                 {step === "compose" && (
                   <motion.div
                     key="compose"
@@ -136,51 +196,78 @@ export default function PostcardModal({ card, onClose }: Props) {
                     exit={{ opacity: 0, x: -16 }}
                     transition={{ duration: 0.2 }}
                   >
-                    {/* Image zone */}
+                    {/* Image upload strip */}
                     <div style={{ padding: "20px 20px 0" }}>
-                      {image ? (
-                        <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", borderRadius: 20, overflow: "hidden" }}>
-                          <img src={image} alt="postcard photo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          <button
-                            onClick={() => setImage(null)}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+
+                        {/* Thumbnails */}
+                        {images.map((src, i) => (
+                          <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
+                            <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <button
+                              onClick={() => removeImage(i)}
+                              style={{
+                                position: "absolute", top: 3, right: 3,
+                                width: 18, height: 18, borderRadius: "50%",
+                                background: "rgba(0,0,0,0.55)", border: "none",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                cursor: "pointer", padding: 0,
+                              }}
+                            >
+                              <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                                <path d="M1 1l8 8M9 1L1 9" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+
+                        {/* Add button */}
+                        {images.length < MAX_IMAGES && (
+                          <div
+                            onClick={() => fileInputRef.current?.click()}
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={handleDrop}
                             style={{
-                              position: "absolute", top: 10, right: 10,
-                              width: 30, height: 30, borderRadius: "50%",
-                              background: "rgba(0,0,0,0.5)", border: "none",
-                              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                              width: images.length === 0 ? "100%" : 64,
+                              height: images.length === 0 ? 180 : 64,
+                              borderRadius: images.length === 0 ? 20 : 12,
+                              border: `2px dashed ${accent}${isDragging ? "60" : "28"}`,
+                              background: isDragging ? `${accent}12` : `${accent}08`,
+                              display: "flex", flexDirection: "column",
+                              alignItems: "center", justifyContent: "center",
+                              gap: images.length === 0 ? 10 : 0,
+                              cursor: "pointer", transition: "all 0.2s ease", flexShrink: 0,
                             }}
                           >
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                              <path d="M1 1l10 10M11 1L1 11" />
+                            <svg width={images.length === 0 ? 28 : 20} height={images.length === 0 ? 28 : 20} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
+                              <line x1="12" y1="5" x2="12" y2="19" />
+                              <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
-                          </button>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => fileInputRef.current?.click()}
-                          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                          onDragLeave={() => setIsDragging(false)}
-                          onDrop={handleDrop}
-                          style={{
-                            width: "100%", aspectRatio: "4/3", borderRadius: 20,
-                            border: `2px dashed ${accent}${isDragging ? "60" : "28"}`,
-                            background: isDragging ? `${accent}12` : `${accent}08`,
-                            display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center", gap: 10,
-                            cursor: "pointer", transition: "all 0.2s ease",
-                          }}
-                        >
-                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path d="M21 15l-5-5L5 21" />
-                          </svg>
-                          <span style={{ color: accent, opacity: 0.4, fontSize: 13, fontWeight: 600 }}>Add a photo</span>
-                          <span style={{ color: accent, opacity: 0.25, fontSize: 11 }}>click or drag &amp; drop</span>
-                        </div>
+                            {images.length === 0 && (
+                              <>
+                                <span style={{ color: accent, opacity: 0.4, fontSize: 13, fontWeight: 600 }}>Add photos</span>
+                                <span style={{ color: accent, opacity: 0.25, fontSize: 11 }}>click or drag &amp; drop · up to {MAX_IMAGES}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {images.length > 0 && (
+                        <p style={{ color: accent, opacity: 0.25, fontSize: 11, marginTop: 6, textAlign: "right" }}>
+                          {images.length}/{MAX_IMAGES} photos
+                        </p>
                       )}
-                      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={(e) => { if (e.target.files) handleFiles(e.target.files); }}
+                      />
                     </div>
 
                     {/* Message */}
@@ -233,11 +320,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                             onClick={() => { setEditingName(true); setNameTouched(true); }}
                             style={{ border: "none", background: "transparent", cursor: "text", padding: 0, display: "flex", alignItems: "center", gap: 5 }}
                           >
-                            <span style={{
-                              fontSize: 14, fontWeight: 600,
-                              color: showNameError ? "#e05252" : accent,
-                              opacity: senderName ? 1 : 0.4,
-                            }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: showNameError ? "#e05252" : accent, opacity: senderName ? 1 : 0.4 }}>
                               {senderName || "Your name *"}
                             </span>
                             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={showNameError ? "#e05252" : accent} strokeWidth="1.8" strokeLinecap="round" style={{ opacity: 0.4 }}>
@@ -293,7 +376,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                   </motion.div>
                 )}
 
-                {/* ── SHARE STEP ── */}
+                {/* ── SHARE ── */}
                 {step === "share" && (
                   <motion.div
                     key="share"
@@ -328,36 +411,21 @@ export default function PostcardModal({ card, onClose }: Props) {
                         flex: 1, fontSize: 12, color: accent, opacity: 0.6,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         fontFamily: "monospace",
-                      }}>
-                        {shareUrl}
-                      </span>
+                      }}>{shareUrl}</span>
                       <button
                         onClick={handleCopy}
                         style={{
-                          flexShrink: 0,
-                          fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
-                          textTransform: "uppercase",
-                          padding: "7px 14px", borderRadius: 9999,
+                          flexShrink: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+                          textTransform: "uppercase", padding: "7px 14px", borderRadius: 9999,
                           border: "none", background: accent, color: bg,
                           cursor: "pointer", transition: "opacity 0.2s",
                           display: "flex", alignItems: "center", gap: 5,
                         }}
                       >
                         {copied ? (
-                          <>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            Copied!
-                          </>
+                          <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>Copied!</>
                         ) : (
-                          <>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="9" y="9" width="13" height="13" rx="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                            Copy
-                          </>
+                          <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>Copy</>
                         )}
                       </button>
                     </div>
