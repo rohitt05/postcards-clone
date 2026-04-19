@@ -6,8 +6,8 @@ import PostcardModal from "./PostcardModal";
 
 const CARD_W = 154;
 const CARD_H  = 210;
-const GAP_X   = 22;
-const GAP_Y   = 22;
+const GAP_X   = 48;
+const GAP_Y   = 48;
 const CELL_W  = CARD_W + GAP_X;
 const CELL_H  = CARD_H + GAP_Y;
 const SPEEDS  = [22, 18, 26, 20, 24, 17, 23, 21, 19, 25];
@@ -52,7 +52,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     ? postcards
     : postcards.filter(p => p.collection === activeCollection);
 
-  // ── viewport ──────────────────────────────────────────────────────────
   useEffect(() => {
     const update = () => { vp.current = { w: window.innerWidth, h: window.innerHeight }; };
     update();
@@ -60,7 +59,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // ── RAF loop ───────────────────────────────────────────────────────────
   useEffect(() => {
     const STIFFNESS = 0.09;
     const DAMPING   = 0.76;
@@ -70,11 +68,9 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       const dt = Math.min((now - lastTime.current) / 1000, 0.05);
       lastTime.current = now;
 
-      // auto-scroll
       for (let i = 0; i < 40; i++)
         colOffsets.current[i] += SPEEDS[i % SPEEDS.length] * dt;
 
-      // spring
       if (!isDragging.current) {
         velX.current = velX.current * DAMPING + (panX.current - dispX.current) * STIFFNESS;
         velY.current = velY.current * DAMPING + (panY.current - dispY.current) * STIFFNESS;
@@ -91,9 +87,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       const dy = dispY.current;
       const { w, h } = vp.current;
 
-      // ── KEY FIX ──────────────────────────────────────────────────────
-      // Compute the world col/row that sits at screen (0,0) — top-left corner.
-      // We add extra BUFFER tiles on every side so there's no bare edge.
       const EXTRA = 3;
       const startCol = Math.floor(-dx / CELL_W) - EXTRA;
       const startRow = Math.floor(-dy / CELL_H) - EXTRA;
@@ -112,7 +105,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           const worldRow = startRow + ri;
           const slotR    = mod(worldRow, rowCount);
 
-          // screen-space position
           const left = worldCol * CELL_W + dx;
           const top  = worldRow * CELL_H + stagger + colOff + dy;
 
@@ -134,7 +126,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCollection]);
 
-  // ── mouse ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const down = (e: MouseEvent) => {
       isDragging.current  = true;
@@ -162,7 +153,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     };
   }, []);
 
-  // ── touch ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const start = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
@@ -195,7 +185,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       className="absolute inset-0 overflow-hidden select-none"
       style={{ background: "#EDEAE3", cursor: isDragging.current ? "grabbing" : "grab" }}
     >
-      {/* dot grid */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -204,7 +193,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         }}
       />
 
-      {/* tiles */}
       {tiles.map((t) => (
         <div
           key={t.slotKey}
@@ -238,7 +226,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             padding: "14px 14px 12px",
             overflow: "hidden", position: "relative",
           }}>
-            {/* stamp box */}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <div style={{
                 width: 36, height: 44,
@@ -249,7 +236,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: "0.1em", color: `${t.card.textColor}38`, textTransform: "uppercase" }}>MONO</span>
               </div>
             </div>
-            {/* label */}
             <div>
               <p style={{ margin: 0, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: t.card.textColor, opacity: 0.45, marginBottom: 2 }}>
                 {t.card.collection} · {t.card.year}
@@ -258,7 +244,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 {t.card.title}
               </p>
             </div>
-            {/* watermark */}
             <div style={{
               position: "absolute", bottom: -28, left: -18,
               width: 110, height: 110, borderRadius: "50%",
@@ -269,7 +254,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         </div>
       ))}
 
-      {/* filter pill */}
       <div className="absolute bottom-6 left-1/2 z-30" style={{
         transform: "translateX(-50%)",
         display: "flex", alignItems: "center", gap: 2,
