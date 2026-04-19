@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import { motion } from "framer-motion";
 import { postcards, Postcard, Collection } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
 
@@ -22,53 +21,51 @@ function seededRandom(seed: number) {
   return x - Math.floor(x);
 }
 
-interface CardLayout {
+const CARD_W = 190;
+const CARD_H = 255;
+const COL_GAP = 80;
+const ROW_GAP = 100;
+const COLS = 7;
+const ROWS = 5;
+
+const colStep = CARD_W + COL_GAP;
+const rowStep = CARD_H + ROW_GAP;
+const totalW = COLS * colStep;
+const totalH = ROWS * rowStep;
+
+interface CardDef {
   id: string;
+  col: number;
+  row: number;
   x: number;
-  y: number;
+  baseY: number;
   rotate: number;
-  floatX: number;
-  floatY: number;
-  floatDuration: number;
-  floatDelay: number;
   imgIndex: number;
+  driftSpeed: number;
 }
 
-const CARD_W = 200;
-const CARD_H = 265;
-const COL_GAP = 60;
-const ROW_GAP = 80;
-const COLS = 8;
-const ROWS = 7;
-
-function generateGridLayout(cards: Postcard[]): CardLayout[] {
-  const layouts: CardLayout[] = [];
-  const colStep = CARD_W + COL_GAP;
-  const rowStep = CARD_H + ROW_GAP;
-  const totalW = COLS * colStep;
-  const totalH = ROWS * rowStep;
+function buildGrid(cards: Postcard[]): CardDef[] {
+  const defs: CardDef[] = [];
   let idx = 0;
-
   for (let row = 0; row < ROWS; row++) {
     const xOffset = row % 2 === 1 ? colStep / 2 : 0;
+    const driftSpeed = 18 + row * 4;
     for (let col = 0; col < COLS; col++) {
       const seed = idx * 7 + 13;
-      const cardIndex = idx % cards.length;
-      layouts.push({
-        id: `grid-${row}-${col}`,
+      defs.push({
+        id: `card-${row}-${col}`,
+        col,
+        row,
         x: col * colStep + xOffset - totalW / 2,
-        y: row * rowStep - totalH / 2,
-        rotate: (seededRandom(seed) - 0.5) * 16,
-        floatX: (seededRandom(seed + 1) - 0.5) * 10,
-        floatY: (seededRandom(seed + 2) - 0.5) * 10,
-        floatDuration: 5 + seededRandom(seed + 3) * 4,
-        floatDelay: seededRandom(seed + 4) * -8,
-        imgIndex: cardIndex % CARD_IMAGES.length,
+        baseY: row * rowStep - totalH / 2,
+        rotate: (seededRandom(seed) - 0.5) * 14,
+        imgIndex: idx % CARD_IMAGES.length,
+        driftSpeed,
       });
       idx++;
     }
   }
-  return layouts;
+  return defs;
 }
 
 interface Props {
@@ -85,10 +82,32 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const lastMouse = useRef({ x: 0, y: 0 });
   const lastTouch = useRef<{ x: number; y: number } | null>(null);
 
-  const allPostcards = postcards;
-  const layout = generateGridLayout(allPostcards);
+  const driftRef = useRef(0);
+  const rafRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
+  const [driftY, setDriftY] = useState(0);
 
-  const filteredLayout = layout.filter((_, i) => {
+  useEffect(() => {
+    const loop = (time: number) => {
+      if (lastTimeRef.current) {
+        const delta = (time - lastTimeRef.current) / 1000;
+        driftRef.current += 22 * delta;
+        if (driftRef.current >= rowStep) {
+          driftRef.current -= rowStep;
+        }
+        setDriftY(driftRef.current);
+      }
+      lastTimeRef.current = time;
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const allPostcards = postcards;
+  const grid = buildGrid(allPostcards);
+
+  const filteredGrid = grid.filter((_, i) => {
     const card = allPostcards[i % allPostcards.length];
     return activeCollection === "all" || card.collection === activeCollection;
   });
@@ -143,10 +162,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     <div
       ref={containerRef}
       className="absolute inset-0 overflow-hidden"
-      style={{
-        background: "#EDEAE3",
-        cursor: isDragging.current ? "grabbing" : "grab",
-      }}
+      style={{ background: "#EDEAE3", cursor: isDragging.current ? "grabbing" : "grab" }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -178,36 +194,20 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           willChange: "transform",
         }}
       >
-        {filteredLayout.map((l, i) => {
+        {filteredGrid.map((def, i) => {
           const card = allPostcards[i % allPostcards.length];
-          const imgSrc = CARD_IMAGES[l.imgIndex];
+          const imgSrc = CARD_IMAGES[def.imgIndex];
+          const rowDrift = (driftY * (def.driftSpeed / 22)) % rowStep;
+          const rawY = def.baseY + rowDrift;
+          const wrappedY = ((rawY + totalH / 2 + totalH * 2) % totalH) - totalH / 2;
+
           return (
-            <motion.div
-              key={l.id}
+            <div
+              key={def.id}
               className="postcard-item absolute"
               style={{
-                x: l.x,
-                y: l.y,
-                rotate: l.rotate,
-                translateX: "-50%",
-                translateY: "-50%",
-              }}
-              animate={{
-                x: [l.x + l.floatX, l.x - l.floatX * 0.6, l.x + l.floatX * 0.3, l.x + l.floatX],
-                y: [l.y + l.floatY, l.y - l.floatY * 0.5, l.y + l.floatY * 0.7, l.y + l.floatY],
-                rotate: [l.rotate, l.rotate + 1.2, l.rotate - 0.8, l.rotate],
-              }}
-              transition={{
-                duration: l.floatDuration,
-                delay: l.floatDelay,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              whileHover={{
-                scale: 1.1,
-                rotate: 0,
-                zIndex: 100,
-                transition: { duration: 0.22, ease: "easeOut" },
+                transform: `translate(calc(${def.x}px - 50%), calc(${wrappedY}px - 50%)) rotate(${def.rotate}deg)`,
+                willChange: "transform",
               }}
               onClick={() => setSelected(card)}
               onMouseDown={(e) => e.stopPropagation()}
@@ -221,6 +221,16 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                   border: "4px solid #111",
                   boxShadow: "4px 8px 24px rgba(0,0,0,0.20), 0 2px 4px rgba(0,0,0,0.10)",
                   background: "#fff",
+                  cursor: "pointer",
+                  transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.transform = "scale(1.08)";
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 16px 40px rgba(0,0,0,0.28)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 24px rgba(0,0,0,0.20), 0 2px 4px rgba(0,0,0,0.10)";
                 }}
               >
                 <img
@@ -254,7 +264,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
@@ -266,9 +276,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             key={c}
             onClick={() => onCollectionChange(c)}
             className={`px-3 py-1 text-[11px] font-semibold tracking-widest uppercase rounded-full transition-all duration-200 ${
-              activeCollection === c
-                ? "bg-[#111] text-white"
-                : "text-[#111]/50 hover:text-[#111]"
+              activeCollection === c ? "bg-[#111] text-white" : "text-[#111]/50 hover:text-[#111]"
             }`}
           >
             {c}
