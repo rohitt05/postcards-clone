@@ -9,14 +9,14 @@ export interface PostcardPayload {
 }
 
 /**
- * Compress image to max 280px, JPEG 35% — keeps each image ~10-15KB
- * so 15 images stay well under URL limits.
+ * Compress image to max 1200px, JPEG 85% — high-quality HD output.
+ * Images are stored in Supabase so there's no URL size limit concern.
  */
 export async function compressImage(dataUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 280;
+      const MAX = 1200;
       let { width, height } = img;
       if (width > MAX || height > MAX) {
         const ratio = Math.min(MAX / width, MAX / height);
@@ -28,7 +28,7 @@ export async function compressImage(dataUrl: string): Promise<string> {
       canvas.height = height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.35));
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
     };
     img.onerror = reject;
     img.src = dataUrl;
