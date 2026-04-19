@@ -24,15 +24,16 @@ function seededRandom(seed: number) {
 
 const CARD_W = 160;
 const CARD_H = 215;
-const COL_GAP = 80;
-const ROW_GAP = 80;
+const GAP = 80;
 const COLS = 8;
-const ROWS = 6;
+const ROWS = 5;
 
-const colStep = CARD_W + COL_GAP;
-const rowStep = CARD_H + ROW_GAP;
+const colStep = CARD_W + GAP;
+const rowStep = CARD_H + GAP;
 const totalW = COLS * colStep;
-const totalH = ROWS * rowStep;
+
+// Duration per row — slight variation gives parallax feel
+const ROW_SPEEDS = [28, 32, 26, 30, 24]; // seconds
 
 interface Props {
   activeCollection: Collection;
@@ -102,30 +103,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
 
   const collections: Collection[] = ["all", "spring", "summer", "autumn", "winter"];
 
-  // Build flat card list
-  const cards: { key: string; x: number; y: number; rotate: number; img: string; title: string }[] = [];
-  let idx = 0;
-  for (let row = 0; row < ROWS; row++) {
-    const xOffset = row % 2 === 1 ? colStep / 2 : 0;
-    for (let col = 0; col < COLS; col++) {
-      const postcard = postcards[idx % postcards.length];
-      if (activeCollection !== "all" && postcard.collection !== activeCollection) {
-        idx++;
-        continue;
-      }
-      const seed = idx * 7 + 13;
-      cards.push({
-        key: `${row}-${col}`,
-        x: col * colStep + xOffset - totalW / 2,
-        y: row * rowStep - totalH / 2,
-        rotate: (seededRandom(seed) - 0.5) * 14,
-        img: CARD_IMAGES[idx % CARD_IMAGES.length],
-        title: postcard.title,
-      });
-      idx++;
-    }
-  }
-
   return (
     <div
       ref={containerRef}
@@ -139,7 +116,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Subtle dot grid */}
+      {/* Dot grid */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -148,7 +125,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         }}
       />
 
-      {/* Springy world */}
+      {/* Springy pan + zoom world */}
       <motion.div
         style={{
           x: springX,
@@ -162,52 +139,97 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           height: 0,
         }}
       >
-        {cards.map((c) => (
-          <div
-            key={c.key}
-            className="postcard-item absolute"
-            style={{
-              transform: `translate(calc(${c.x}px - 50%), calc(${c.y}px - 50%)) rotate(${c.rotate}deg)`,
-              width: CARD_W,
-              height: CARD_H,
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => setSelected(postcards.find(p => p.title === c.title) ?? null)}
-          >
-            <div
-              style={{
-                width: CARD_W,
-                height: CARD_H,
-                borderRadius: 20,
-                border: "4px solid #111",
-                overflow: "hidden",
-                boxShadow: "4px 8px 24px rgba(0,0,0,0.18)",
-                background: "#fff",
-                cursor: "pointer",
-                transition: "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease",
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.transform = "scale(1.08)";
-                (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 16px 40px rgba(0,0,0,0.26)";
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-                (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 24px rgba(0,0,0,0.18)";
+        {Array.from({ length: ROWS }, (_, row) => {
+          const xOffset = row % 2 === 1 ? colStep / 2 : 0;
+          const duration = ROW_SPEEDS[row];
+          // Row is centered vertically: rows spread around 0
+          const rowBaseY = (row - (ROWS - 1) / 2) * rowStep;
+
+          // Build cards for this row — 2 copies stacked (copy 0 at y=0, copy 1 at y=rowStep)
+          // The strip animates from y=0 to y=-rowStep, then repeats — seamless
+          const rowCards = Array.from({ length: COLS }, (_, col) => {
+            const idx = row * COLS + col;
+            const postcard = postcards[idx % postcards.length];
+            if (activeCollection !== "all" && postcard.collection !== activeCollection) return null;
+            const seed = idx * 7 + 13;
+            return {
+              col,
+              postcard,
+              img: CARD_IMAGES[idx % CARD_IMAGES.length],
+              rotate: (seededRandom(seed) - 0.5) * 14,
+            };
+          }).filter(Boolean) as { col: number; postcard: typeof postcards[0]; img: string; rotate: number }[];
+
+          if (rowCards.length === 0) return null;
+
+          return (
+            <motion.div
+              key={`row-${row}`}
+              style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0 }}
+              animate={{ y: [0, -rowStep] }}
+              transition={{
+                duration,
+                ease: "linear",
+                repeat: Infinity,
+                repeatType: "loop",
               }}
             >
-              <img
-                src={c.img}
-                alt={c.title}
-                draggable={false}
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
-              />
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 52, background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
-              <p style={{ position: "absolute", bottom: 10, left: 12, color: "#fff", fontSize: 10, fontWeight: 600, letterSpacing: "0.04em", textShadow: "0 1px 3px rgba(0,0,0,0.5)", margin: 0 }}>
-                {c.title}
-              </p>
-            </div>
-          </div>
-        ))}
+              {/* 2 copies so loop is invisible */}
+              {[0, 1].map(copy =>
+                rowCards.map(({ col, postcard, img, rotate }) => {
+                  const x = col * colStep + xOffset - totalW / 2;
+                  const y = rowBaseY + copy * rowStep;
+                  return (
+                    <div
+                      key={`${copy}-${col}`}
+                      className="postcard-item absolute"
+                      style={{
+                        transform: `translate(calc(${x}px - 50%), calc(${y}px - 50%)) rotate(${rotate}deg)`,
+                        width: CARD_W,
+                        height: CARD_H,
+                      }}
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={() => setSelected(postcard)}
+                    >
+                      <div
+                        style={{
+                          width: CARD_W,
+                          height: CARD_H,
+                          borderRadius: 20,
+                          border: "4px solid #111",
+                          overflow: "hidden",
+                          boxShadow: "4px 8px 24px rgba(0,0,0,0.18)",
+                          background: "#fff",
+                          cursor: "pointer",
+                          transition: "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease",
+                        }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1.08)";
+                          (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 16px 40px rgba(0,0,0,0.26)";
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
+                          (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 24px rgba(0,0,0,0.18)";
+                        }}
+                      >
+                        <img
+                          src={img}
+                          alt={postcard.title}
+                          draggable={false}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
+                        />
+                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 52, background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
+                        <p style={{ position: "absolute", bottom: 10, left: 12, color: "#fff", fontSize: 10, fontWeight: 600, letterSpacing: "0.04em", textShadow: "0 1px 3px rgba(0,0,0,0.5)", margin: 0 }}>
+                          {postcard.title}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </motion.div>
+          );
+        })}
       </motion.div>
 
       {/* Collection filter */}
