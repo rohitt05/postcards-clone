@@ -11,7 +11,6 @@ const GAP_X   = 48;
 const GAP_Y   = 48;
 const CELL_W  = CARD_W + GAP_X;
 const CELL_H  = CARD_H + GAP_Y;
-// Negative speeds → cards flow bottom-to-top
 const SPEEDS  = [-22, -18, -26, -20, -24, -17, -23, -21, -19, -25];
 
 function seeded(n: number) {
@@ -49,6 +48,10 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const [selected, setSelected] = useState<Postcard | null>(null);
   const [tiles, setTiles]       = useState<TileData[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Ref kept in sync with menuOpen so event listeners (registered once) can read current value
+  const menuOpenRef = useRef(false);
+  useEffect(() => { menuOpenRef.current = menuOpen; }, [menuOpen]);
 
   const panX  = useRef(0); const panY  = useRef(0);
   const velX  = useRef(0); const velY  = useRef(0);
@@ -143,6 +146,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
 
   useEffect(() => {
     const down = (e: MouseEvent) => {
+      if (menuOpenRef.current) return;
       isDragging.current  = true;
       didDrag.current     = false;
       dragAnchorX.current = e.clientX - panX.current;
@@ -170,6 +174,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
 
   useEffect(() => {
     const start = (e: TouchEvent) => {
+      if (menuOpenRef.current) return;
       if (e.touches.length !== 1) return;
       isDragging.current  = true;
       didDrag.current     = false;
@@ -193,21 +198,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     };
   }, []);
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-collection-menu]')) setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [menuOpen]);
-
   return (
     <div
       className="absolute inset-0 overflow-hidden select-none"
@@ -226,7 +216,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       {tiles.map((t) => (
         <div
           key={t.slotKey}
-          onClick={() => { if (!didDrag.current) setSelected(t.card); }}
+          onClick={() => { if (!didDrag.current && !menuOpenRef.current) setSelected(t.card); }}
           style={{
             position:   "absolute",
             left:       t.left,
@@ -281,7 +271,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         className="absolute bottom-5 left-1/2 z-30"
         style={{ transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8 }}
       >
-        {/* DESKTOP: full pill tabs (hidden on mobile) */}
+        {/* DESKTOP: full pill tabs */}
         <div
           className="hidden md:flex items-center gap-1"
           style={{
@@ -310,7 +300,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           ))}
         </div>
 
-        {/* MOBILE: single pill button that opens a full-screen overlay */}
+        {/* MOBILE: pill button that opens full-screen overlay */}
         <div className="flex md:hidden" data-collection-menu>
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
@@ -334,7 +324,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         </div>
       </div>
 
-      {/* MOBILE: full-screen soft overlay with collection names */}
+      {/* MOBILE: full-screen soft overlay */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
@@ -343,11 +333,13 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            onClick={() => setMenuOpen(false)}
+            onTouchEnd={(e) => { e.stopPropagation(); setMenuOpen(false); }}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }}
             className="fixed inset-0 md:hidden z-40 flex flex-col items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)" }}
+            style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", touchAction: "none" }}
           >
             <div
+              onTouchEnd={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}
             >
@@ -357,6 +349,11 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04, duration: 0.2, ease: "easeOut" }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    onCollectionChange(c);
+                    setMenuOpen(false);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCollectionChange(c);
