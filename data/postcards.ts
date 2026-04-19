@@ -1,13 +1,10 @@
 export type Collection =
   | "all"
-  | "spring"
-  | "summer"
-  | "autumn"
-  | "winter"
   | "love"
-  | "friendship"
-  | "birthday"
+  | "best-friends"
+  | "christmas"
   | "easter"
+  | "birthday"
   | "long-distance";
 
 export interface Postcard {
@@ -19,118 +16,11 @@ export interface Postcard {
   textColor: string;
   description: string;
   year: number;
-  image?: string; // unDraw SVG illustration URL
+  image?: string;
 }
 
 export const postcards: Postcard[] = [
-  // ── SPRING ──────────────────────────────────────────────────────────────────
-  {
-    id: "sp-01",
-    title: "Bloom",
-    artist: "Mono Studio",
-    collection: "spring",
-    bg: "#D4E8C2",
-    textColor: "#2D4A1E",
-    description: "Soft greens and cherry blossoms of early spring.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_spring_illustration_kvum.svg",
-  },
-  {
-    id: "sp-02",
-    title: "Petal Rain",
-    artist: "Mono Studio",
-    collection: "spring",
-    bg: "#F2C4CE",
-    textColor: "#5C1A2B",
-    description: "Pink petals falling like a gentle morning rain.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_blooming_jtv6.svg",
-  },
-  {
-    id: "sp-03",
-    title: "Golden Hour",
-    artist: "Mono Studio",
-    collection: "spring",
-    bg: "#F9E4B7",
-    textColor: "#5C3A00",
-    description: "Warm spring afternoons bathed in golden light.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_sunny_day_-8-f3r.svg",
-  },
-
-  // ── SUMMER ──────────────────────────────────────────────────────────────────
-  {
-    id: "su-01",
-    title: "Azure",
-    artist: "Mono Studio",
-    collection: "summer",
-    bg: "#B3D9F2",
-    textColor: "#0A2E4A",
-    description: "The deep blue of a perfect summer sky.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_beach_sunset_gkmo.svg",
-  },
-  {
-    id: "su-02",
-    title: "Solstice",
-    artist: "Mono Studio",
-    collection: "summer",
-    bg: "#FFD166",
-    textColor: "#3D2000",
-    description: "Long evenings at the peak of summer.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_sunshine_re_246h.svg",
-  },
-
-  // ── AUTUMN ──────────────────────────────────────────────────────────────────
-  {
-    id: "au-01",
-    title: "Ember",
-    artist: "Mono Studio",
-    collection: "autumn",
-    bg: "#E8A87C",
-    textColor: "#3D1500",
-    description: "Amber leaves and the smell of wood smoke.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_fall_is_coming_yl-0-x.svg",
-  },
-  {
-    id: "au-02",
-    title: "Harvest",
-    artist: "Mono Studio",
-    collection: "autumn",
-    bg: "#C0392B",
-    textColor: "#FFF5F0",
-    description: "Deep reds of a late October evening.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_autumn_re_rvy6.svg",
-  },
-
-  // ── WINTER ──────────────────────────────────────────────────────────────────
-  {
-    id: "wi-01",
-    title: "Frost",
-    artist: "Mono Studio",
-    collection: "winter",
-    bg: "#D6E4F0",
-    textColor: "#1A2E3D",
-    description: "A still morning after the first snowfall.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_snowman_re_qpc9.svg",
-  },
-  {
-    id: "wi-02",
-    title: "Solitude",
-    artist: "Mono Studio",
-    collection: "winter",
-    bg: "#2C3E50",
-    textColor: "#D6E4F0",
-    description: "The quiet beauty of a frozen landscape.",
-    year: 2024,
-    image: "https://undraw.co/api/illustrations/undraw_cold_night_re_vj05.svg",
-  },
-
-  // ── LOVE ────────────────────────────────────────────────────────────────────
+  // ── LOVE ──────────────────────────────────────────────────────────────────
   {
     id: "lv-01",
     title: "Always You",
@@ -164,24 +54,35 @@ export const postcards: Postcard[] = [
     year: 2025,
     image: "https://undraw.co/api/illustrations/undraw_romantic_couple_re_bbd4.svg",
   },
-
-  // ── FRIENDSHIP ──────────────────────────────────────────────────────────────
   {
-    id: "fr-01",
-    title: "Together",
+    id: "lv-04",
+    title: "My Person",
     artist: "Mono Studio",
-    collection: "friendship",
-    bg: "#FFF3CD",
+    collection: "love",
+    bg: "#FADADD",
+    textColor: "#5C0020",
+    description: "You are home to me.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_wedding_re_lgem.svg",
+  },
+
+  // ── BEST FRIENDS ──────────────────────────────────────────────────────────
+  {
+    id: "bf-01",
+    title: "Always There",
+    artist: "Mono Studio",
+    collection: "best-friends",
+    bg: "#FFF9C4",
     textColor: "#4A3500",
-    description: "Side by side, always.",
+    description: "Through everything, side by side.",
     year: 2025,
     image: "https://undraw.co/api/illustrations/undraw_best_friends_re_ce13.svg",
   },
   {
-    id: "fr-02",
+    id: "bf-02",
     title: "Ride or Die",
     artist: "Mono Studio",
-    collection: "friendship",
+    collection: "best-friends",
     bg: "#C8E6C9",
     textColor: "#1B5E20",
     description: "The kind of friendship that never fades.",
@@ -189,15 +90,107 @@ export const postcards: Postcard[] = [
     image: "https://undraw.co/api/illustrations/undraw_friends_re_uu9t.svg",
   },
   {
-    id: "fr-03",
+    id: "bf-03",
     title: "Good Times",
     artist: "Mono Studio",
-    collection: "friendship",
+    collection: "best-friends",
     bg: "#E1BEE7",
     textColor: "#4A148C",
     description: "Here's to all the laughs we've shared.",
     year: 2025,
     image: "https://undraw.co/api/illustrations/undraw_having_fun_re_vj4h.svg",
+  },
+  {
+    id: "bf-04",
+    title: "Just Us",
+    artist: "Mono Studio",
+    collection: "best-friends",
+    bg: "#B3E5FC",
+    textColor: "#01579B",
+    description: "No explanation needed. You just get it.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_hang_out_re_udl5.svg",
+  },
+
+  // ── CHRISTMAS ───────────────────────────────────────────────────────────────
+  {
+    id: "xm-01",
+    title: "Season's Joy",
+    artist: "Mono Studio",
+    collection: "christmas",
+    bg: "#E8F5E9",
+    textColor: "#1B5E20",
+    description: "Warmth, wonder, and a little bit of magic.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_christmas_re_q9wo.svg",
+  },
+  {
+    id: "xm-02",
+    title: "Cosy Night",
+    artist: "Mono Studio",
+    collection: "christmas",
+    bg: "#C62828",
+    textColor: "#FFEBEE",
+    description: "Firelight, hot cocoa, and you.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_winter_re_0kxc.svg",
+  },
+  {
+    id: "xm-03",
+    title: "Gift of You",
+    artist: "Mono Studio",
+    collection: "christmas",
+    bg: "#FFFDE7",
+    textColor: "#4A3500",
+    description: "The best present is having you in my life.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_gift_re_qr17.svg",
+  },
+  {
+    id: "xm-04",
+    title: "Snowfall",
+    artist: "Mono Studio",
+    collection: "christmas",
+    bg: "#E3F2FD",
+    textColor: "#0D47A1",
+    description: "Every flake a tiny miracle.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_snowman_re_qpc9.svg",
+  },
+
+  // ── EASTER ──────────────────────────────────────────────────────────────────
+  {
+    id: "ea-01",
+    title: "Egg Hunt",
+    artist: "Mono Studio",
+    collection: "easter",
+    bg: "#F1F8E9",
+    textColor: "#33691E",
+    description: "Spring magic hidden in the grass.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_easter_egg_hunt_re_ap1a.svg",
+  },
+  {
+    id: "ea-02",
+    title: "New Beginnings",
+    artist: "Mono Studio",
+    collection: "easter",
+    bg: "#FFF8E1",
+    textColor: "#4A3500",
+    description: "Every spring is a fresh start.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_blooming_jtv6.svg",
+  },
+  {
+    id: "ea-03",
+    title: "Hello Spring",
+    artist: "Mono Studio",
+    collection: "easter",
+    bg: "#FCE4EC",
+    textColor: "#880E4F",
+    description: "Pastel skies and hopeful hearts.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_spring_illustration_kvum.svg",
   },
 
   // ── BIRTHDAY ────────────────────────────────────────────────────────────────
@@ -228,38 +221,25 @@ export const postcards: Postcard[] = [
     title: "Confetti",
     artist: "Mono Studio",
     collection: "birthday",
-    bg: "#B3E5FC",
-    textColor: "#01579B",
+    bg: "#E8EAF6",
+    textColor: "#1A237E",
     description: "Let the whole world know it's your day.",
     year: 2025,
     image: "https://undraw.co/api/illustrations/undraw_celebration_re_kc9k.svg",
   },
-
-  // ── EASTER ──────────────────────────────────────────────────────────────────
   {
-    id: "ea-01",
-    title: "Egg Hunt",
+    id: "bd-04",
+    title: "You Glow",
     artist: "Mono Studio",
-    collection: "easter",
-    bg: "#E8F5E9",
-    textColor: "#1B5E20",
-    description: "Spring magic hidden in the grass.",
+    collection: "birthday",
+    bg: "#FBE9E7",
+    textColor: "#BF360C",
+    description: "Brighter every single year.",
     year: 2025,
-    image: "https://undraw.co/api/illustrations/undraw_easter_egg_hunt_re_ap1a.svg",
-  },
-  {
-    id: "ea-02",
-    title: "New Beginnings",
-    artist: "Mono Studio",
-    collection: "easter",
-    bg: "#FFF8E1",
-    textColor: "#4A3500",
-    description: "Every spring is a fresh start.",
-    year: 2025,
-    image: "https://undraw.co/api/illustrations/undraw_nature_benefits_re_kn53.svg",
+    image: "https://undraw.co/api/illustrations/undraw_happy_birthday_re_c559.svg",
   },
 
-  // ── LONG DISTANCE ───────────────────────────────────────────────────────────
+  // ── LONG DISTANCE ──────────────────────────────────────────────────────────
   {
     id: "ld-01",
     title: "Miles Apart",
@@ -292,5 +272,16 @@ export const postcards: Postcard[] = [
     description: "Counting down every day until I see you again.",
     year: 2025,
     image: "https://undraw.co/api/illustrations/undraw_countdown_re_rbro.svg",
+  },
+  {
+    id: "ld-04",
+    title: "Thinking of You",
+    artist: "Mono Studio",
+    collection: "long-distance",
+    bg: "#E8F5E9",
+    textColor: "#1B5E20",
+    description: "Every quiet moment, my mind goes to you.",
+    year: 2025,
+    image: "https://undraw.co/api/illustrations/undraw_feeling_happy_re_e5c6.svg",
   },
 ];

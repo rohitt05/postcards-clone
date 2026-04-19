@@ -6,14 +6,11 @@ import { Collection } from "@/data/postcards";
 
 const tabs: { label: string; value: Collection; emoji: string }[] = [
   { label: "All",           value: "all",           emoji: "✦" },
-  { label: "Spring",        value: "spring",        emoji: "🌸" },
-  { label: "Summer",        value: "summer",        emoji: "☀️" },
-  { label: "Autumn",        value: "autumn",        emoji: "🍂" },
-  { label: "Winter",        value: "winter",        emoji: "❄️" },
   { label: "Love",          value: "love",          emoji: "❤️" },
-  { label: "Friendship",    value: "friendship",    emoji: "🤝" },
-  { label: "Birthday",      value: "birthday",      emoji: "🎂" },
+  { label: "Best Friends",  value: "best-friends",  emoji: "🤝" },
+  { label: "Christmas",     value: "christmas",     emoji: "🎄" },
   { label: "Easter",        value: "easter",        emoji: "🐣" },
+  { label: "Birthday",      value: "birthday",      emoji: "🎂" },
   { label: "Long Distance", value: "long-distance", emoji: "✈️" },
 ];
 
