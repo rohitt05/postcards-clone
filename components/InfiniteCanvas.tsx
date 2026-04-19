@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 import { useSpring, useMotionValue, motion } from "framer-motion";
 import { postcards, Collection } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
@@ -15,16 +15,14 @@ const CARD_H = 260;
 const COL_GAP = 32;
 const ROW_GAP = 32;
 const COLS = 5;
+const ROWS_PER_SET = 20; // tall enough that loop is never noticed
 
-// one "page" of rows — 2 copies stacked so loop is seamless
-const ROWS_PER_SET = 4;
 const colStep = CARD_W + COL_GAP;
 const rowStep = CARD_H + ROW_GAP;
 const setH = ROWS_PER_SET * rowStep;
 const totalW = COLS * colStep;
 
-// Each column drifts at slightly different speed for parallax
-const COL_SPEEDS = [26, 22, 30, 24, 28];
+const COL_SPEEDS = [60, 50, 70, 55, 65];
 
 interface Props {
   activeCollection: Collection;
@@ -35,7 +33,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const containerRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<(typeof postcards)[0] | null>(null);
 
-  // Springy pan
   const rawPanX = useRef(0);
   const rawPanY = useRef(0);
   const panX = useMotionValue(0);
@@ -99,7 +96,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Springy canvas */}
       <motion.div
         style={{
           x: springX,
@@ -111,16 +107,14 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           height: 0,
         }}
       >
-        {/* Each column is an independent vertical belt */}
         {Array.from({ length: COLS }, (_, col) => {
           const duration = COL_SPEEDS[col];
           const x = col * colStep - totalW / 2 + CARD_W / 2;
-          // offset odd columns upward so they appear staggered
           const yOffset = col % 2 === 1 ? -rowStep / 2 : 0;
 
-          // Build cards for this column — 2 full sets stacked
+          // 2 full sets of ROWS_PER_SET cards each — seamless loop
           const colCards = Array.from({ length: ROWS_PER_SET * 2 }, (_, i) => {
-            const postcard = filtered[(col * 3 + i) % filtered.length];
+            const postcard = filtered[(col * 7 + i * 3) % filtered.length];
             const seed = col * 100 + i;
             return {
               postcard,
@@ -133,7 +127,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             <motion.div
               key={`col-${col}`}
               style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0 }}
-              animate={{ y: [0, rowStep * ROWS_PER_SET] }}
+              animate={{ y: [0, setH] }}
               transition={{
                 duration,
                 ease: "linear",
