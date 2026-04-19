@@ -5,19 +5,27 @@ import { motion, AnimatePresence } from "framer-motion";
 import { postcards, Collection, Postcard } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
 
-const CARD_W = 154;
-const CARD_H  = 210;
-const GAP_X   = 48;
-const GAP_Y   = 48;
-const CELL_W  = CARD_W + GAP_X;
-const CELL_H  = CARD_H + GAP_Y;
-const SPEEDS  = [-22, -18, -26, -20, -24, -17, -23, -21, -19, -25];
+// ── Responsive card sizing ──────────────────────────────────────────────────
+// Returns card + gap dimensions based on viewport width so that:
+//   mobile  (<640)  → ~3 columns visible
+//   tablet  (640+)  → ~4 columns visible
+//   desktop (1024+) → ~5 columns visible
+//   large   (1440+) → original feel, 5-6 columns
+function getCardSize(vpW: number) {
+  if (vpW < 640) {
+    return { cardW: 92,  cardH: 126, gapX: 18, gapY: 18 };
+  } else if (vpW < 1024) {
+    return { cardW: 120, cardH: 164, gapX: 26, gapY: 26 };
+  } else if (vpW < 1440) {
+    return { cardW: 138, cardH: 188, gapX: 36, gapY: 36 };
+  } else {
+    return { cardW: 154, cardH: 210, gapX: 48, gapY: 48 };
+  }
+}
 
-// Max tilt angle (degrees) at the viewport edge
-const MAX_TILT = 14;
-// How strongly velocity drives the warp (tune this)
+const SPEEDS        = [-22, -18, -26, -20, -24, -17, -23, -21, -19, -25];
+const MAX_TILT      = 14;
 const WARP_STRENGTH = 0.045;
-// Damping for the warp spring
 const WARP_DAMPING  = 0.72;
 
 function seeded(n: number) {
@@ -29,31 +37,36 @@ function clamp(v: number, min: number, max: number) { return Math.max(min, Math.
 
 interface TileData {
   slotKey: string;
-  left: number;
-  top: number;
-  rotate: number;
-  card: Postcard;
-  // Per-tile 3D warp
-  rx: number; // rotateX
-  ry: number; // rotateY
+  left:    number;
+  top:     number;
+  rotate:  number;
+  card:    Postcard;
+  rx:      number;
+  ry:      number;
+  // carry per-frame card dimensions so the render uses the right size
+  cardW:   number;
+  cardH:   number;
 }
 
 interface Props {
-  activeCollection: Collection;
+  activeCollection:   Collection;
   onCollectionChange: (c: Collection) => void;
 }
 
 const COLLECTION_LABELS: Record<Collection, string> = {
-  all: "All",
-  love: "Love",
-  "best-friends": "Best Friends",
-  christmas: "Christmas",
-  easter: "Easter",
-  birthday: "Birthday",
+  all:             "All",
+  love:            "Love",
+  "best-friends":  "Best Friends",
+  christmas:       "Christmas",
+  easter:          "Easter",
+  birthday:        "Birthday",
   "long-distance": "Long Distance",
 };
 
-const collections: Collection[] = ["all", "love", "best-friends", "christmas", "easter", "birthday", "long-distance"];
+const collections: Collection[] = [
+  "all", "love", "best-friends", "christmas",
+  "easter", "birthday", "long-distance",
+];
 
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
   const [selected, setSelected] = useState<Postcard | null>(null);
@@ -67,9 +80,8 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const velX  = useRef(0); const velY  = useRef(0);
   const dispX = useRef(0); const dispY = useRef(0);
 
-  // Warp state — smoothed velocity that drives the cloth tilt
-  const warpX = useRef(0); // current warp X (springs toward dragVel)
-  const warpY = useRef(0); // current warp Y
+  const warpX    = useRef(0);
+  const warpY    = useRef(0);
   const prevPanX = useRef(0);
   const prevPanY = useRef(0);
 
@@ -118,14 +130,11 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         velY.current  = 0;
       }
 
-      // ── Cloth warp ──
-      // Instant drag delta (pixels/frame) → target warp angle
       const rawDragDX = panX.current - prevPanX.current;
       const rawDragDY = panY.current - prevPanY.current;
       prevPanX.current = panX.current;
       prevPanY.current = panY.current;
 
-      // Spring warpX/Y toward the current drag velocity, decay when not dragging
       const targetWX = isDragging.current ? rawDragDX * WARP_STRENGTH : 0;
       const targetWY = isDragging.current ? rawDragDY * WARP_STRENGTH : 0;
       warpX.current = warpX.current * WARP_DAMPING + targetWX * (1 - WARP_DAMPING);
@@ -137,11 +146,16 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       const cx = w / 2;
       const cy = h / 2;
 
-      const EXTRA = 3;
-      const startCol = Math.floor(-dx / CELL_W) - EXTRA;
-      const startRow = Math.floor(-dy / CELL_H) - EXTRA;
-      const colCount  = Math.ceil(w / CELL_W) + EXTRA * 2 + 2;
-      const rowCount  = Math.ceil(h / CELL_H) + EXTRA * 2 + 2;
+      // ── Compute responsive sizes from viewport width each frame ──
+      const { cardW, cardH, gapX, gapY } = getCardSize(w);
+      const cellW = cardW + gapX;
+      const cellH = cardH + gapY;
+
+      const EXTRA    = 3;
+      const startCol = Math.floor(-dx / cellW) - EXTRA;
+      const startRow = Math.floor(-dy / cellH) - EXTRA;
+      const colCount = Math.ceil(w / cellW) + EXTRA * 2 + 2;
+      const rowCount = Math.ceil(h / cellH) + EXTRA * 2 + 2;
 
       const next: TileData[] = [];
 
@@ -149,24 +163,19 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         const worldCol = startCol + ci;
         const slotC    = mod(worldCol, colCount);
         const colOff   = colOffsets.current[mod(worldCol, 40)];
-        const stagger  = mod(worldCol, 2) === 1 ? CELL_H * 0.5 : 0;
+        const stagger  = mod(worldCol, 2) === 1 ? cellH * 0.5 : 0;
 
         for (let ri = 0; ri < rowCount; ri++) {
           const worldRow = startRow + ri;
           const slotR    = mod(worldRow, rowCount);
 
-          const left = worldCol * CELL_W + dx;
-          const top  = worldRow * CELL_H + stagger + colOff + dy;
+          const left = worldCol * cellW + dx;
+          const top  = worldRow * cellH + stagger + colOff + dy;
 
-          // Normalized tile position from center (-1 to 1)
-          const nx = clamp((left + CARD_W / 2 - cx) / (w / 2), -1, 1);
-          const ny = clamp((top  + CARD_H / 2 - cy) / (h / 2), -1, 1);
-
-          // Globe factor: tiles further from center warp more (quadratic falloff)
+          const nx = clamp((left + cardW / 2 - cx) / (w / 2), -1, 1);
+          const ny = clamp((top  + cardH / 2 - cy) / (h / 2), -1, 1);
           const distFactor = Math.sqrt(nx * nx + ny * ny);
 
-          // rotateX is driven by Y-drag (tilts forward/back), scaled by horizontal position
-          // rotateY is driven by X-drag (tilts left/right), scaled by vertical position
           const rx = clamp(-warpY.current * MAX_TILT * (0.4 + 0.6 * distFactor) * (1 - nx * nx * 0.4), -MAX_TILT, MAX_TILT);
           const ry = clamp( warpX.current * MAX_TILT * (0.4 + 0.6 * distFactor) * (1 - ny * ny * 0.4), -MAX_TILT, MAX_TILT);
 
@@ -175,7 +184,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           const f      = filteredRef.current;
           const card   = f[mod(Math.abs(worldCol * 7 + worldRow * 13), f.length)];
 
-          next.push({ slotKey: `${slotC}:${slotR}`, left, top, rotate, card, rx, ry });
+          next.push({ slotKey: `${slotC}:${slotR}`, left, top, rotate, card, rx, ry, cardW, cardH });
         }
       }
 
@@ -246,10 +255,9 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     <div
       className="absolute inset-0 overflow-hidden select-none"
       style={{
-        background: "#EDE8DF",
-        cursor: isDragging.current ? "grabbing" : "grab",
-        // Perspective on the root gives the 3D stage for all tiles
-        perspective: "900px",
+        background:        "#EDE8DF",
+        cursor:            isDragging.current ? "grabbing" : "grab",
+        perspective:       "900px",
         perspectiveOrigin: "50% 50%",
       }}
     >
@@ -258,7 +266,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
+          backgroundSize:  "28px 28px",
         }}
       />
 
@@ -268,17 +276,16 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           key={t.slotKey}
           onClick={() => { if (!didDrag.current && !menuOpenRef.current) setSelected(t.card); }}
           style={{
-            position:   "absolute",
-            left:       t.left,
-            top:        t.top,
-            width:      CARD_W,
-            height:     CARD_H,
-            // Cloth warp: rotateX/Y per-tile + base random tilt
-            transform:  `rotateX(${t.rx}deg) rotateY(${t.ry}deg) rotate(${t.rotate}deg)`,
-            willChange: "left, top, transform",
-            cursor:     "pointer",
+            position:       "absolute",
+            left:           t.left,
+            top:            t.top,
+            width:          t.cardW,
+            height:         t.cardH,
+            transform:      `rotateX(${t.rx}deg) rotateY(${t.ry}deg) rotate(${t.rotate}deg)`,
+            willChange:     "left, top, transform",
+            cursor:         "pointer",
             transformStyle: "preserve-3d",
-            transition: "transform 0.28s cubic-bezier(0.34,1.56,0.64,1)",
+            transition:     "transform 0.28s cubic-bezier(0.34,1.56,0.64,1)",
           }}
           onMouseEnter={e => {
             (e.currentTarget as HTMLDivElement).style.transform =
@@ -345,7 +352,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 borderRadius: 9999, border: "none", cursor: "pointer",
                 fontFamily: "var(--font-dm-sans)",
                 background: activeCollection === c ? "#1A1410" : "transparent",
-                color: activeCollection === c ? "#F7F2EA" : "#8A7A70",
+                color:      activeCollection === c ? "#F7F2EA"  : "#8A7A70",
                 transition: "all 0.18s ease",
               }}
             >
@@ -360,16 +367,14 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
             style={{
               padding: "7px 20px",
-              borderRadius: 9999,
-              border: "none", cursor: "pointer",
-              background: "rgba(255,255,255,0.92)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              boxShadow: "0 2px 16px rgba(0,0,0,0.13),0 0 0 1px rgba(0,0,0,0.06)",
+              borderRadius: 9999, border: "none", cursor: "pointer",
+              background:          "rgba(255,255,255,0.92)",
+              backdropFilter:      "blur(20px)",
+              WebkitBackdropFilter:"blur(20px)",
+              boxShadow:    "0 2px 16px rgba(0,0,0,0.13),0 0 0 1px rgba(0,0,0,0.06)",
               fontSize: 10, fontWeight: 700,
               letterSpacing: "0.12em", textTransform: "uppercase",
-              color: "#1A1410",
-              fontFamily: "var(--font-dm-sans)",
+              color: "#1A1410", fontFamily: "var(--font-dm-sans)",
               transition: "all 0.2s ease",
             }}
           >
@@ -414,18 +419,13 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                     setMenuOpen(false);
                   }}
                   style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
+                    background: "none", border: "none", cursor: "pointer",
                     padding: "10px 24px",
-                    fontSize: activeCollection === c ? 26 : 22,
+                    fontSize:   activeCollection === c ? 26 : 22,
                     fontWeight: activeCollection === c ? 700 : 400,
-                    color: activeCollection === c ? "#1A1410" : "#8A7A70",
-                    fontFamily: "var(--font-cormorant)",
-                    fontStyle: "italic",
-                    letterSpacing: "0.01em",
-                    transition: "all 0.15s ease",
-                    lineHeight: 1.2,
+                    color:      activeCollection === c ? "#1A1410" : "#8A7A70",
+                    fontFamily: "var(--font-cormorant)", fontStyle: "italic",
+                    letterSpacing: "0.01em", transition: "all 0.15s ease", lineHeight: 1.2,
                   }}
                 >
                   {COLLECTION_LABELS[c]}
