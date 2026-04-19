@@ -4,18 +4,19 @@ export interface PostcardPayload {
   cardId: string;
   message: string;
   senderName: string;
-  image: string | null; // compressed base64 data URL or null
+  image: string | null;
 }
 
 /**
- * Compress an image data-URL to a smaller JPEG base64 string.
- * Max width/height: 800px, quality: 0.65
+ * Compress image to max 320px wide, JPEG at 40% quality.
+ * This keeps the base64 output under ~30KB for most photos,
+ * preventing 431 Request Header Fields Too Large errors.
  */
 export async function compressImage(dataUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 800;
+      const MAX = 320;
       let { width, height } = img;
       if (width > MAX || height > MAX) {
         const ratio = Math.min(MAX / width, MAX / height);
@@ -27,7 +28,7 @@ export async function compressImage(dataUrl: string): Promise<string> {
       canvas.height = height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.65));
+      resolve(canvas.toDataURL("image/jpeg", 0.4));
     };
     img.onerror = reject;
     img.src = dataUrl;
@@ -37,7 +38,6 @@ export async function compressImage(dataUrl: string): Promise<string> {
 /** Encode payload → URL-safe base64 string */
 export function encodePayload(payload: PostcardPayload): string {
   const json = JSON.stringify(payload);
-  // btoa needs latin1 — use encodeURIComponent trick for unicode
   const b64 = btoa(unescape(encodeURIComponent(json)));
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }

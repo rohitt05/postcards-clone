@@ -24,6 +24,8 @@ export default function PostcardModal({ card, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const MAX_MESSAGE = 1000;
+
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
     const reader = new FileReader();
@@ -113,6 +115,8 @@ export default function PostcardModal({ card, onClose }: Props) {
                 background: bg,
                 boxShadow: "0 8px 48px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.1)",
                 overflow: "hidden",
+                maxHeight: "90dvh",
+                overflowY: "auto",
               }}
             >
               <AnimatePresence mode="wait">
@@ -179,17 +183,17 @@ export default function PostcardModal({ card, onClose }: Props) {
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         placeholder="Write something to your loved one…"
-                        maxLength={280}
-                        rows={3}
+                        maxLength={MAX_MESSAGE}
+                        rows={4}
                         style={{
                           width: "100%", resize: "none", border: "none", outline: "none",
                           background: `${accent}08`, borderRadius: 16,
-                          padding: "12px 14px", fontSize: 14, lineHeight: 1.6,
+                          padding: "12px 14px", fontSize: 14, lineHeight: 1.65,
                           color: accent, fontFamily: "inherit",
                         }}
                       />
                       <div style={{ textAlign: "right", marginTop: 3 }}>
-                        <span style={{ color: accent, opacity: 0.22, fontSize: 11 }}>{message.length}/280</span>
+                        <span style={{ color: accent, opacity: 0.22, fontSize: 11 }}>{message.length}/{MAX_MESSAGE}</span>
                       </div>
                     </div>
 
@@ -286,7 +290,6 @@ export default function PostcardModal({ card, onClose }: Props) {
                     transition={{ duration: 0.22 }}
                     style={{ padding: "28px 24px" }}
                   >
-                    {/* Icon */}
                     <div style={{ textAlign: "center", marginBottom: 20 }}>
                       <div style={{
                         width: 56, height: 56, borderRadius: "50%",
@@ -302,7 +305,6 @@ export default function PostcardModal({ card, onClose }: Props) {
                       <p style={{ color: accent, opacity: 0.5, fontSize: 13, marginTop: 4 }}>Share this link with your loved one</p>
                     </div>
 
-                    {/* URL box */}
                     <div style={{
                       background: `${accent}08`, borderRadius: 16,
                       padding: "12px 14px",
@@ -347,12 +349,10 @@ export default function PostcardModal({ card, onClose }: Props) {
                       </button>
                     </div>
 
-                    {/* Note */}
                     <p style={{ color: accent, opacity: 0.3, fontSize: 11, textAlign: "center", marginBottom: 20, lineHeight: 1.5 }}>
                       Anyone with this link can view your postcard.
                     </p>
 
-                    {/* Actions */}
                     <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                       <button
                         onClick={() => setStep("compose")}
