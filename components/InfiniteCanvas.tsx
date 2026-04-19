@@ -5,18 +5,6 @@ import { useSpring, useMotionValue, motion } from "framer-motion";
 import { postcards, Collection } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
 
-const CARD_IMAGES = [
-  "https://picsum.photos/seed/spring1/320/420",
-  "https://picsum.photos/seed/petal/320/420",
-  "https://picsum.photos/seed/blossom/320/420",
-  "https://picsum.photos/seed/azure/320/420",
-  "https://picsum.photos/seed/solstice/320/420",
-  "https://picsum.photos/seed/ember/320/420",
-  "https://picsum.photos/seed/harvest1/320/420",
-  "https://picsum.photos/seed/frost1/320/420",
-  "https://picsum.photos/seed/solitude1/320/420",
-];
-
 function seededRandom(seed: number) {
   const x = Math.sin(seed + 1) * 10000;
   return x - Math.floor(x);
@@ -107,7 +95,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     <div
       ref={containerRef}
       className="absolute inset-0 overflow-hidden"
-      style={{ background: "#EDEAE3", cursor: isDragging.current ? "grabbing" : "grab" }}
+      style={{ background: "#F0EDE6", cursor: isDragging.current ? "grabbing" : "grab" }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -116,16 +104,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Dot grid */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.07) 1px, transparent 1px)",
-          backgroundSize: `${40 * zoom}px ${40 * zoom}px`,
-        }}
-      />
-
-      {/* World */}
+      {/* Springy pan + zoom world */}
       <motion.div
         style={{
           x: springX,
@@ -152,10 +131,9 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             return {
               col,
               postcard,
-              img: CARD_IMAGES[idx % CARD_IMAGES.length],
-              rotate: (seededRandom(seed) - 0.5) * 10,
+              rotate: (seededRandom(seed) - 0.5) * 8,
             };
-          }).filter(Boolean) as { col: number; postcard: typeof postcards[0]; img: string; rotate: number }[];
+          }).filter(Boolean) as { col: number; postcard: typeof postcards[0]; rotate: number }[];
 
           if (rowCards.length === 0) return null;
 
@@ -172,7 +150,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
               }}
             >
               {[0, 1].map(copy =>
-                rowCards.map(({ col, postcard, img, rotate }) => {
+                rowCards.map(({ col, postcard, rotate }) => {
                   const x = col * colStep + xOffset - totalW / 2;
                   const y = rowBaseY + copy * rowStep;
                   return (
@@ -191,31 +169,35 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                         style={{
                           width: CARD_W,
                           height: CARD_H,
-                          borderRadius: 22,
-                          border: "4px solid #111",
+                          borderRadius: 18,
                           overflow: "hidden",
-                          boxShadow: "4px 8px 28px rgba(0,0,0,0.15)",
-                          background: "#fff",
+                          background: postcard.bg,
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
                           cursor: "pointer",
                           transition: "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease",
+                          display: "flex",
+                          alignItems: "flex-end",
+                          padding: "14px",
                         }}
                         onMouseEnter={e => {
-                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1.07)";
-                          (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 18px 44px rgba(0,0,0,0.22)";
+                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1.06)";
+                          (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.1)";
                         }}
                         onMouseLeave={e => {
                           (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-                          (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 28px rgba(0,0,0,0.15)";
+                          (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)";
                         }}
                       >
-                        <img
-                          src={img}
-                          alt={postcard.title}
-                          draggable={false}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
-                        />
-                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 56, background: "linear-gradient(to top, rgba(0,0,0,0.48), transparent)", pointerEvents: "none" }} />
-                        <p style={{ position: "absolute", bottom: 11, left: 13, color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textShadow: "0 1px 3px rgba(0,0,0,0.5)", margin: 0 }}>
+                        <p style={{
+                          color: postcard.textColor,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          opacity: 0.7,
+                          margin: 0,
+                          lineHeight: 1,
+                        }}>
                           {postcard.title}
                         </p>
                       </div>
