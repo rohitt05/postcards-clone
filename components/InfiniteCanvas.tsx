@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
+import { useSpring, useMotionValue, motion } from "framer-motion";
 import { postcards, Postcard, Collection } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
 
@@ -21,21 +22,22 @@ function seededRandom(seed: number) {
   return x - Math.floor(x);
 }
 
-const CARD_W = 190;
-const CARD_H = 255;
-const COL_GAP = 80;
-const ROW_GAP = 100;
+// Smaller cards
+const CARD_W = 160;
+const CARD_H = 215;
+const COL_GAP = 90;
+const ROW_GAP = 110;
 const COLS = 7;
-const ROWS = 5;
+const ROWS = 6; // extra row so wrap is never visible
 
 const colStep = CARD_W + COL_GAP;
 const rowStep = CARD_H + ROW_GAP;
 const totalW = COLS * colStep;
-const totalH = ROWS * rowStep;
+// Full cycle = all rows — this is key to fix the overlap glitch
+const cycleH = ROWS * rowStep;
 
 interface CardDef {
   id: string;
-  col: number;
   row: number;
   x: number;
   baseY: number;
@@ -49,16 +51,17 @@ function buildGrid(cards: Postcard[]): CardDef[] {
   let idx = 0;
   for (let row = 0; row < ROWS; row++) {
     const xOffset = row % 2 === 1 ? colStep / 2 : 0;
-    const driftSpeed = 18 + row * 4;
+    // Slightly different speed per row for parallax
+    const driftSpeed = 16 + row * 3;
     for (let col = 0; col < COLS; col++) {
       const seed = idx * 7 + 13;
       defs.push({
         id: `card-${row}-${col}`,
-        col,
         row,
         x: col * colStep + xOffset - totalW / 2,
-        baseY: row * rowStep - totalH / 2,
-        rotate: (seededRandom(seed) - 0.5) * 14,
+        // Distribute rows evenly across full cycle, centered at 0
+        baseY: row * rowStep - cycleH / 2,
+        rotate: (seededRandom(seed) - 0.5) * 12,
         imgIndex: idx % CARD_IMAGES.length,
         driftSpeed,
       });
@@ -75,13 +78,24 @@ interface Props {
 
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<Postcard | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  // Raw pan target
+  const rawPanX = useRef(0);
+  const rawPanY = useRef(0);
+
+  // Springy motion values for pan — this gives the globe/elastic drag feel
+  const panX = useMotionValue(0);
+  const panY = useMotionValue(0);
+  const springX = useSpring(panX, { stiffness: 120, damping: 22, mass: 0.8 });
+  const springY = useSpring(panY, { stiffness: 120, damping: 22, mass: 0.8 });
+
   const isDragging = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
   const lastTouch = useRef<{ x: number; y: number } | null>(null);
 
+  // Drift loop — accumulates over cycleH (full grid height) then resets
   const driftRef = useRef(0);
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -91,10 +105,9 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     const loop = (time: number) => {
       if (lastTimeRef.current) {
         const delta = (time - lastTimeRef.current) / 1000;
-        driftRef.current += 22 * delta;
-        if (driftRef.current >= rowStep) {
-          driftRef.current -= rowStep;
-        }
+        driftRef.current += 20 * delta;
+        // Wrap over full cycle so every row completes one full loop
+        if (driftRef.current >= cycleH) driftRef.current -= cycleH;
         setDriftY(driftRef.current);
       }
       lastTimeRef.current = time;
@@ -123,8 +136,11 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     const dx = e.clientX - lastMouse.current.x;
     const dy = e.clientY - lastMouse.current.y;
     lastMouse.current = { x: e.clientX, y: e.clientY };
-    setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
-  }, []);
+    rawPanX.current += dx;
+    rawPanY.current += dy;
+    panX.set(rawPanX.current);
+    panY.set(rawPanY.current);
+  }, [panX, panY]);
 
   const onMouseUp = useCallback(() => { isDragging.current = false; }, []);
 
@@ -150,9 +166,12 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       const dx = e.touches[0].clientX - lastTouch.current.x;
       const dy = e.touches[0].clientY - lastTouch.current.y;
       lastTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
+      rawPanX.current += dx;
+      rawPanY.current += dy;
+      panX.set(rawPanX.current);
+      panY.set(rawPanY.current);
     }
-  }, []);
+  }, [panX, panY]);
 
   const onTouchEnd = useCallback(() => { lastTouch.current = null; }, []);
 
@@ -171,20 +190,21 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Dot grid */}
-      <div
+      {/* Dot grid — uses spring values via inline style */}
+      <motion.div
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.09) 1px, transparent 1px)`,
           backgroundSize: `${36 * zoom}px ${36 * zoom}px`,
-          backgroundPosition: `${pan.x % (36 * zoom)}px ${pan.y % (36 * zoom)}px`,
         }}
       />
 
-      {/* World */}
-      <div
+      {/* World — spring pan + zoom */}
+      <motion.div
         style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          x: springX,
+          y: springY,
+          scale: zoom,
           transformOrigin: "center center",
           position: "absolute",
           top: "50%",
@@ -197,9 +217,13 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         {filteredGrid.map((def, i) => {
           const card = allPostcards[i % allPostcards.length];
           const imgSrc = CARD_IMAGES[def.imgIndex];
-          const rowDrift = (driftY * (def.driftSpeed / 22)) % rowStep;
+
+          // Each row drifts at its own speed (parallax)
+          // Wrap Y within cycleH so cards loop seamlessly with NO overlap
+          const rowDrift = (driftY * (def.driftSpeed / 20)) % cycleH;
           const rawY = def.baseY + rowDrift;
-          const wrappedY = ((rawY + totalH / 2 + totalH * 2) % totalH) - totalH / 2;
+          // Correct wrap: mod by cycleH, offset by half so 0 is center
+          const wrappedY = ((rawY + cycleH * 3) % cycleH) - cycleH / 2;
 
           return (
             <div
@@ -217,20 +241,20 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 style={{
                   width: CARD_W,
                   height: CARD_H,
-                  borderRadius: 22,
+                  borderRadius: 20,
                   border: "4px solid #111",
-                  boxShadow: "4px 8px 24px rgba(0,0,0,0.20), 0 2px 4px rgba(0,0,0,0.10)",
+                  boxShadow: "4px 8px 24px rgba(0,0,0,0.18), 0 2px 4px rgba(0,0,0,0.08)",
                   background: "#fff",
                   cursor: "pointer",
                   transition: "transform 0.2s ease, box-shadow 0.2s ease",
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.transform = "scale(1.08)";
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 16px 40px rgba(0,0,0,0.28)";
+                  (e.currentTarget as HTMLDivElement).style.transform = "scale(1.09)";
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 16px 40px rgba(0,0,0,0.26)";
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 24px rgba(0,0,0,0.20), 0 2px 4px rgba(0,0,0,0.10)";
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 24px rgba(0,0,0,0.18), 0 2px 4px rgba(0,0,0,0.08)";
                 }}
               >
                 <img
@@ -251,13 +275,13 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 <div
                   className="absolute bottom-0 left-0 right-0 pointer-events-none"
                   style={{
-                    height: 64,
-                    background: "linear-gradient(to top, rgba(0,0,0,0.48) 0%, transparent 100%)",
+                    height: 56,
+                    background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)",
                   }}
                 />
-                <div className="absolute bottom-3 left-3">
+                <div className="absolute bottom-2.5 left-3">
                   <p
-                    className="text-white text-[11px] font-semibold tracking-wide leading-tight"
+                    className="text-white text-[10px] font-semibold tracking-wide leading-tight"
                     style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}
                   >
                     {card.title}
@@ -267,7 +291,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             </div>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Floating collection filter */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-white/85 backdrop-blur-md rounded-full px-2 py-1.5 shadow-lg border border-black/8">
