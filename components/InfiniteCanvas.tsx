@@ -22,18 +22,18 @@ function seededRandom(seed: number) {
   return x - Math.floor(x);
 }
 
-const CARD_W = 160;
-const CARD_H = 215;
-const GAP = 80;
-const COLS = 8;
-const ROWS = 5;
+const CARD_W = 180;
+const CARD_H = 240;
+const COL_GAP = 140;
+const ROW_GAP = 160;
+const COLS = 5;
+const ROWS = 3;
 
-const colStep = CARD_W + GAP;
-const rowStep = CARD_H + GAP;
+const colStep = CARD_W + COL_GAP;
+const rowStep = CARD_H + ROW_GAP;
 const totalW = COLS * colStep;
 
-// Duration per row — slight variation gives parallax feel
-const ROW_SPEEDS = [28, 32, 26, 30, 24]; // seconds
+const ROW_SPEEDS = [32, 38, 28];
 
 interface Props {
   activeCollection: Collection;
@@ -120,12 +120,12 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)",
-          backgroundSize: `${36 * zoom}px ${36 * zoom}px`,
+          backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.07) 1px, transparent 1px)",
+          backgroundSize: `${40 * zoom}px ${40 * zoom}px`,
         }}
       />
 
-      {/* Springy pan + zoom world */}
+      {/* World */}
       <motion.div
         style={{
           x: springX,
@@ -142,11 +142,8 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         {Array.from({ length: ROWS }, (_, row) => {
           const xOffset = row % 2 === 1 ? colStep / 2 : 0;
           const duration = ROW_SPEEDS[row];
-          // Row is centered vertically: rows spread around 0
           const rowBaseY = (row - (ROWS - 1) / 2) * rowStep;
 
-          // Build cards for this row — 2 copies stacked (copy 0 at y=0, copy 1 at y=rowStep)
-          // The strip animates from y=0 to y=-rowStep, then repeats — seamless
           const rowCards = Array.from({ length: COLS }, (_, col) => {
             const idx = row * COLS + col;
             const postcard = postcards[idx % postcards.length];
@@ -156,7 +153,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
               col,
               postcard,
               img: CARD_IMAGES[idx % CARD_IMAGES.length],
-              rotate: (seededRandom(seed) - 0.5) * 14,
+              rotate: (seededRandom(seed) - 0.5) * 10,
             };
           }).filter(Boolean) as { col: number; postcard: typeof postcards[0]; img: string; rotate: number }[];
 
@@ -174,7 +171,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 repeatType: "loop",
               }}
             >
-              {/* 2 copies so loop is invisible */}
               {[0, 1].map(copy =>
                 rowCards.map(({ col, postcard, img, rotate }) => {
                   const x = col * colStep + xOffset - totalW / 2;
@@ -195,21 +191,21 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                         style={{
                           width: CARD_W,
                           height: CARD_H,
-                          borderRadius: 20,
+                          borderRadius: 22,
                           border: "4px solid #111",
                           overflow: "hidden",
-                          boxShadow: "4px 8px 24px rgba(0,0,0,0.18)",
+                          boxShadow: "4px 8px 28px rgba(0,0,0,0.15)",
                           background: "#fff",
                           cursor: "pointer",
                           transition: "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease",
                         }}
                         onMouseEnter={e => {
-                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1.08)";
-                          (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 16px 40px rgba(0,0,0,0.26)";
+                          (e.currentTarget as HTMLDivElement).style.transform = "scale(1.07)";
+                          (e.currentTarget as HTMLDivElement).style.boxShadow = "6px 18px 44px rgba(0,0,0,0.22)";
                         }}
                         onMouseLeave={e => {
                           (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-                          (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 24px rgba(0,0,0,0.18)";
+                          (e.currentTarget as HTMLDivElement).style.boxShadow = "4px 8px 28px rgba(0,0,0,0.15)";
                         }}
                       >
                         <img
@@ -218,8 +214,8 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                           draggable={false}
                           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
                         />
-                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 52, background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
-                        <p style={{ position: "absolute", bottom: 10, left: 12, color: "#fff", fontSize: 10, fontWeight: 600, letterSpacing: "0.04em", textShadow: "0 1px 3px rgba(0,0,0,0.5)", margin: 0 }}>
+                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 56, background: "linear-gradient(to top, rgba(0,0,0,0.48), transparent)", pointerEvents: "none" }} />
+                        <p style={{ position: "absolute", bottom: 11, left: 13, color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textShadow: "0 1px 3px rgba(0,0,0,0.5)", margin: 0 }}>
                           {postcard.title}
                         </p>
                       </div>
