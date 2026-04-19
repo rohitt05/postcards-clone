@@ -3,11 +3,14 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Postcard } from "@/data/postcards";
 import { useState, useRef, useCallback } from "react";
+import { compressImage, encodePayload } from "@/lib/encodePostcard";
 
 interface Props {
   card: Postcard | null;
   onClose: () => void;
 }
+
+type Step = "compose" | "share";
 
 export default function PostcardModal({ card, onClose }: Props) {
   const [image, setImage] = useState<string | null>(null);
@@ -15,7 +18,10 @@ export default function PostcardModal({ card, onClose }: Props) {
   const [message, setMessage] = useState("");
   const [senderName, setSenderName] = useState("");
   const [editingName, setEditingName] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [step, setStep] = useState<Step>("compose");
+  const [shareUrl, setShareUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((file: File) => {
@@ -32,22 +38,40 @@ export default function PostcardModal({ card, onClose }: Props) {
     if (file) handleFile(file);
   }, [handleFile]);
 
-  const handleSend = () => {
-    setSent(true);
-    setTimeout(() => {
-      setSent(false);
-      setImage(null);
-      setMessage("");
-      setSenderName("");
-      onClose();
-    }, 2000);
+  const handleSend = async () => {
+    if (!card) return;
+    setLoading(true);
+    try {
+      const compressed = image ? await compressImage(image) : null;
+      const encoded = encodePayload({
+        cardId: card.id,
+        message,
+        senderName,
+        image: compressed,
+      });
+      const url = `${window.location.origin}/view?p=${encoded}`;
+      setShareUrl(url);
+      setStep("share");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
   };
 
   const handleClose = () => {
     setImage(null);
     setMessage("");
     setSenderName("");
-    setSent(false);
+    setStep("compose");
+    setShareUrl("");
+    setCopied(false);
+    setLoading(false);
     setEditingName(false);
     onClose();
   };
@@ -91,186 +115,269 @@ export default function PostcardModal({ card, onClose }: Props) {
                 overflow: "hidden",
               }}
             >
-              {/* ── Image zone ── */}
-              <div style={{ padding: "20px 20px 0" }}>
-                {sent ? (
-                  <motion.div
-                    initial={{ scale: 0.85, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    style={{
-                      width: "100%", aspectRatio: "4/3", borderRadius: 20,
-                      background: `${accent}18`,
-                      display: "flex", flexDirection: "column",
-                      alignItems: "center", justifyContent: "center", gap: 10,
-                    }}
-                  >
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
-                      <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4 20-7z" />
-                    </svg>
-                    <span style={{ color: accent, opacity: 0.7, fontSize: 14, fontWeight: 600 }}>Postcard sent!</span>
-                  </motion.div>
-                ) : image ? (
-                  <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", borderRadius: 20, overflow: "hidden" }}>
-                    <img
-                      src={image}
-                      alt="postcard photo"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                    <button
-                      onClick={() => setImage(null)}
-                      style={{
-                        position: "absolute", top: 10, right: 10,
-                        width: 30, height: 30, borderRadius: "50%",
-                        background: "rgba(0,0,0,0.5)", border: "none",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                        <path d="M1 1l10 10M11 1L1 11" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={handleDrop}
-                    style={{
-                      width: "100%", aspectRatio: "4/3", borderRadius: 20,
-                      border: `2px dashed ${accent}${isDragging ? "60" : "28"}`,
-                      background: isDragging ? `${accent}12` : `${accent}08`,
-                      display: "flex", flexDirection: "column",
-                      alignItems: "center", justifyContent: "center", gap: 10,
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                  >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <path d="M21 15l-5-5L5 21" />
-                    </svg>
-                    <span style={{ color: accent, opacity: 0.4, fontSize: 13, fontWeight: 600 }}>Add a photo</span>
-                    <span style={{ color: accent, opacity: 0.25, fontSize: 11 }}>click or drag &amp; drop</span>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-                />
-              </div>
+              <AnimatePresence mode="wait">
 
-              {/* ── Message ── */}
-              {!sent && (
-                <div style={{ padding: "14px 20px 0" }}>
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Write something to your loved one…"
-                    maxLength={280}
-                    rows={3}
-                    style={{
-                      width: "100%", resize: "none", border: "none", outline: "none",
+                {/* ── COMPOSE STEP ── */}
+                {step === "compose" && (
+                  <motion.div
+                    key="compose"
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -16 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {/* Image zone */}
+                    <div style={{ padding: "20px 20px 0" }}>
+                      {image ? (
+                        <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", borderRadius: 20, overflow: "hidden" }}>
+                          <img src={image} alt="postcard photo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <button
+                            onClick={() => setImage(null)}
+                            style={{
+                              position: "absolute", top: 10, right: 10,
+                              width: 30, height: 30, borderRadius: "50%",
+                              background: "rgba(0,0,0,0.5)", border: "none",
+                              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                              <path d="M1 1l10 10M11 1L1 11" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={handleDrop}
+                          style={{
+                            width: "100%", aspectRatio: "4/3", borderRadius: 20,
+                            border: `2px dashed ${accent}${isDragging ? "60" : "28"}`,
+                            background: isDragging ? `${accent}12` : `${accent}08`,
+                            display: "flex", flexDirection: "column",
+                            alignItems: "center", justifyContent: "center", gap: 10,
+                            cursor: "pointer", transition: "all 0.2s ease",
+                          }}
+                        >
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
+                          </svg>
+                          <span style={{ color: accent, opacity: 0.4, fontSize: 13, fontWeight: 600 }}>Add a photo</span>
+                          <span style={{ color: accent, opacity: 0.25, fontSize: 11 }}>click or drag &amp; drop</span>
+                        </div>
+                      )}
+                      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                    </div>
+
+                    {/* Message */}
+                    <div style={{ padding: "14px 20px 0" }}>
+                      <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Write something to your loved one…"
+                        maxLength={280}
+                        rows={3}
+                        style={{
+                          width: "100%", resize: "none", border: "none", outline: "none",
+                          background: `${accent}08`, borderRadius: 16,
+                          padding: "12px 14px", fontSize: 14, lineHeight: 1.6,
+                          color: accent, fontFamily: "inherit",
+                        }}
+                      />
+                      <div style={{ textAlign: "right", marginTop: 3 }}>
+                        <span style={{ color: accent, opacity: 0.22, fontSize: 11 }}>{message.length}/280</span>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{
+                      padding: "12px 20px 18px",
+                      borderTop: `1px solid ${accent}14`,
+                      marginTop: 10,
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <div>
+                        <p style={{ color: accent, opacity: 0.35, fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 3 }}>From</p>
+                        {editingName ? (
+                          <input
+                            value={senderName}
+                            onChange={(e) => setSenderName(e.target.value)}
+                            onBlur={() => setEditingName(false)}
+                            onKeyDown={(e) => { if (e.key === "Enter") setEditingName(false); }}
+                            placeholder="Your name"
+                            maxLength={40}
+                            autoFocus
+                            style={{
+                              border: "none", outline: "none", background: "transparent",
+                              fontSize: 14, fontWeight: 600, color: accent,
+                              fontFamily: "inherit", width: 150, padding: 0,
+                              borderBottom: `1.5px solid ${accent}40`,
+                            }}
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setEditingName(true)}
+                            style={{ border: "none", background: "transparent", cursor: "text", padding: 0, display: "flex", alignItems: "center", gap: 5 }}
+                          >
+                            <span style={{ fontSize: 14, fontWeight: 600, color: accent, opacity: senderName ? 1 : 0.32 }}>
+                              {senderName || "Your name"}
+                            </span>
+                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" style={{ opacity: 0.32 }}>
+                              <path d="M8 1l3 3-7 7H1V8l7-7z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={handleClose}
+                          style={{
+                            fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+                            textTransform: "uppercase", padding: "8px 16px",
+                            borderRadius: 9999, border: `1.5px solid ${accent}28`,
+                            color: accent, background: "transparent", cursor: "pointer", opacity: 0.65,
+                          }}
+                        >Close</button>
+                        <button
+                          onClick={handleSend}
+                          disabled={(!message.trim() && !image) || loading}
+                          style={{
+                            fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+                            textTransform: "uppercase", padding: "8px 18px",
+                            borderRadius: 9999, border: "none",
+                            background: accent, color: bg,
+                            cursor: (!message.trim() && !image) || loading ? "not-allowed" : "pointer",
+                            opacity: (!message.trim() && !image) ? 0.3 : 1,
+                            transition: "opacity 0.2s",
+                            display: "flex", alignItems: "center", gap: 6,
+                          }}
+                        >
+                          {loading ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }}>
+                              <path d="M12 2a10 10 0 0 1 10 10" />
+                            </svg>
+                          ) : (
+                            <>
+                              Generate link
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                              </svg>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── SHARE STEP ── */}
+                {step === "share" && (
+                  <motion.div
+                    key="share"
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 16 }}
+                    transition={{ duration: 0.22 }}
+                    style={{ padding: "28px 24px" }}
+                  >
+                    {/* Icon */}
+                    <div style={{ textAlign: "center", marginBottom: 20 }}>
+                      <div style={{
+                        width: 56, height: 56, borderRadius: "50%",
+                        background: `${accent}14`,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        marginBottom: 12,
+                      }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+                          <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4 20-7z" />
+                        </svg>
+                      </div>
+                      <p style={{ color: accent, fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em", margin: 0 }}>Postcard ready!</p>
+                      <p style={{ color: accent, opacity: 0.5, fontSize: 13, marginTop: 4 }}>Share this link with your loved one</p>
+                    </div>
+
+                    {/* URL box */}
+                    <div style={{
                       background: `${accent}08`, borderRadius: 16,
                       padding: "12px 14px",
-                      fontSize: 14, lineHeight: 1.6,
-                      color: accent, fontFamily: "inherit",
-                    }}
-                  />
-                  <div style={{ textAlign: "right", marginTop: 3 }}>
-                    <span style={{ color: accent, opacity: 0.22, fontSize: 11 }}>{message.length}/280</span>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Footer ── */}
-              <div
-                style={{
-                  padding: "12px 20px 18px",
-                  borderTop: `1px solid ${accent}14`,
-                  marginTop: 10,
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}
-              >
-                {/* Sender */}
-                <div>
-                  <p style={{ color: accent, opacity: 0.35, fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 3 }}>From</p>
-                  {editingName ? (
-                    <input
-                      value={senderName}
-                      onChange={(e) => setSenderName(e.target.value)}
-                      onBlur={() => setEditingName(false)}
-                      onKeyDown={(e) => { if (e.key === "Enter") setEditingName(false); }}
-                      placeholder="Your name"
-                      maxLength={40}
-                      autoFocus
-                      style={{
-                        border: "none", outline: "none", background: "transparent",
-                        fontSize: 14, fontWeight: 600, color: accent,
-                        fontFamily: "inherit", width: 150, padding: 0,
-                        borderBottom: `1.5px solid ${accent}40`,
-                      }}
-                    />
-                  ) : (
-                    <button
-                      onClick={() => setEditingName(true)}
-                      style={{
-                        border: "none", background: "transparent", cursor: "text",
-                        padding: 0, display: "flex", alignItems: "center", gap: 5,
-                      }}
-                    >
-                      <span style={{ fontSize: 14, fontWeight: 600, color: accent, opacity: senderName ? 1 : 0.32 }}>
-                        {senderName || "Your name"}
+                      display: "flex", alignItems: "center", gap: 10,
+                      marginBottom: 12,
+                    }}>
+                      <span style={{
+                        flex: 1, fontSize: 12, color: accent, opacity: 0.6,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        fontFamily: "monospace",
+                      }}>
+                        {shareUrl}
                       </span>
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" style={{ opacity: 0.32 }}>
-                        <path d="M8 1l3 3-7 7H1V8l7-7z" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
+                      <button
+                        onClick={handleCopy}
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+                          textTransform: "uppercase",
+                          padding: "7px 14px", borderRadius: 9999,
+                          border: "none", background: accent, color: bg,
+                          cursor: "pointer", transition: "opacity 0.2s",
+                          display: "flex", alignItems: "center", gap: 5,
+                        }}
+                      >
+                        {copied ? (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy
+                          </>
+                        )}
+                      </button>
+                    </div>
 
-                {/* Buttons */}
-                {!sent && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={handleClose}
-                      style={{
-                        fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
-                        textTransform: "uppercase", padding: "8px 16px",
-                        borderRadius: 9999, border: `1.5px solid ${accent}28`,
-                        color: accent, background: "transparent", cursor: "pointer",
-                        opacity: 0.65,
-                      }}
-                    >
-                      Close
-                    </button>
-                    <button
-                      onClick={handleSend}
-                      disabled={!message.trim() && !image}
-                      style={{
-                        fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
-                        textTransform: "uppercase", padding: "8px 18px",
-                        borderRadius: 9999, border: "none",
-                        background: accent, color: bg,
-                        cursor: (!message.trim() && !image) ? "not-allowed" : "pointer",
-                        opacity: (!message.trim() && !image) ? 0.3 : 1,
-                        transition: "opacity 0.2s",
-                        display: "flex", alignItems: "center", gap: 6,
-                      }}
-                    >
-                      Send
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4 20-7z" />
-                      </svg>
-                    </button>
-                  </div>
+                    {/* Note */}
+                    <p style={{ color: accent, opacity: 0.3, fontSize: 11, textAlign: "center", marginBottom: 20, lineHeight: 1.5 }}>
+                      Anyone with this link can view your postcard.
+                    </p>
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                      <button
+                        onClick={() => setStep("compose")}
+                        style={{
+                          fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+                          textTransform: "uppercase", padding: "9px 18px",
+                          borderRadius: 9999, border: `1.5px solid ${accent}28`,
+                          color: accent, background: "transparent", cursor: "pointer", opacity: 0.65,
+                        }}
+                      >← Edit</button>
+                      <button
+                        onClick={handleClose}
+                        style={{
+                          fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+                          textTransform: "uppercase", padding: "9px 18px",
+                          borderRadius: 9999, border: "none",
+                          background: accent, color: bg, cursor: "pointer",
+                        }}
+                      >Done</button>
+                    </div>
+                  </motion.div>
                 )}
-              </div>
+
+              </AnimatePresence>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           </motion.div>
         </>
