@@ -13,11 +13,19 @@ const CELL_W  = CARD_W + GAP_X;
 const CELL_H  = CARD_H + GAP_Y;
 const SPEEDS  = [-22, -18, -26, -20, -24, -17, -23, -21, -19, -25];
 
+// Max tilt angle (degrees) at the viewport edge
+const MAX_TILT = 14;
+// How strongly velocity drives the warp (tune this)
+const WARP_STRENGTH = 0.045;
+// Damping for the warp spring
+const WARP_DAMPING  = 0.72;
+
 function seeded(n: number) {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 }
 function mod(a: number, b: number) { return ((a % b) + b) % b; }
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 
 interface TileData {
   slotKey: string;
@@ -25,6 +33,9 @@ interface TileData {
   top: number;
   rotate: number;
   card: Postcard;
+  // Per-tile 3D warp
+  rx: number; // rotateX
+  ry: number; // rotateY
 }
 
 interface Props {
@@ -49,13 +60,19 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const [tiles, setTiles]       = useState<TileData[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Ref kept in sync with menuOpen so event listeners (registered once) can read current value
   const menuOpenRef = useRef(false);
   useEffect(() => { menuOpenRef.current = menuOpen; }, [menuOpen]);
 
   const panX  = useRef(0); const panY  = useRef(0);
   const velX  = useRef(0); const velY  = useRef(0);
   const dispX = useRef(0); const dispY = useRef(0);
+
+  // Warp state — smoothed velocity that drives the cloth tilt
+  const warpX = useRef(0); // current warp X (springs toward dragVel)
+  const warpY = useRef(0); // current warp Y
+  const prevPanX = useRef(0);
+  const prevPanY = useRef(0);
+
   const colOffsets  = useRef<Float64Array>(new Float64Array(40));
   const lastTime    = useRef(0);
   const isDragging  = useRef(false);
@@ -101,9 +118,24 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         velY.current  = 0;
       }
 
+      // ── Cloth warp ──
+      // Instant drag delta (pixels/frame) → target warp angle
+      const rawDragDX = panX.current - prevPanX.current;
+      const rawDragDY = panY.current - prevPanY.current;
+      prevPanX.current = panX.current;
+      prevPanY.current = panY.current;
+
+      // Spring warpX/Y toward the current drag velocity, decay when not dragging
+      const targetWX = isDragging.current ? rawDragDX * WARP_STRENGTH : 0;
+      const targetWY = isDragging.current ? rawDragDY * WARP_STRENGTH : 0;
+      warpX.current = warpX.current * WARP_DAMPING + targetWX * (1 - WARP_DAMPING);
+      warpY.current = warpY.current * WARP_DAMPING + targetWY * (1 - WARP_DAMPING);
+
       const dx = dispX.current;
       const dy = dispY.current;
       const { w, h } = vp.current;
+      const cx = w / 2;
+      const cy = h / 2;
 
       const EXTRA = 3;
       const startCol = Math.floor(-dx / CELL_W) - EXTRA;
@@ -126,12 +158,24 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           const left = worldCol * CELL_W + dx;
           const top  = worldRow * CELL_H + stagger + colOff + dy;
 
-          const seed    = mod(worldCol * 2147483647 + worldRow * 16807, 999983);
-          const rotate  = (seeded(seed) - 0.5) * 7;
-          const f       = filteredRef.current;
-          const card    = f[mod(Math.abs(worldCol * 7 + worldRow * 13), f.length)];
+          // Normalized tile position from center (-1 to 1)
+          const nx = clamp((left + CARD_W / 2 - cx) / (w / 2), -1, 1);
+          const ny = clamp((top  + CARD_H / 2 - cy) / (h / 2), -1, 1);
 
-          next.push({ slotKey: `${slotC}:${slotR}`, left, top, rotate, card });
+          // Globe factor: tiles further from center warp more (quadratic falloff)
+          const distFactor = Math.sqrt(nx * nx + ny * ny);
+
+          // rotateX is driven by Y-drag (tilts forward/back), scaled by horizontal position
+          // rotateY is driven by X-drag (tilts left/right), scaled by vertical position
+          const rx = clamp(-warpY.current * MAX_TILT * (0.4 + 0.6 * distFactor) * (1 - nx * nx * 0.4), -MAX_TILT, MAX_TILT);
+          const ry = clamp( warpX.current * MAX_TILT * (0.4 + 0.6 * distFactor) * (1 - ny * ny * 0.4), -MAX_TILT, MAX_TILT);
+
+          const seed   = mod(worldCol * 2147483647 + worldRow * 16807, 999983);
+          const rotate = (seeded(seed) - 0.5) * 7;
+          const f      = filteredRef.current;
+          const card   = f[mod(Math.abs(worldCol * 7 + worldRow * 13), f.length)];
+
+          next.push({ slotKey: `${slotC}:${slotR}`, left, top, rotate, card, rx, ry });
         }
       }
 
@@ -201,7 +245,13 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   return (
     <div
       className="absolute inset-0 overflow-hidden select-none"
-      style={{ background: "#EDE8DF", cursor: isDragging.current ? "grabbing" : "grab" }}
+      style={{
+        background: "#EDE8DF",
+        cursor: isDragging.current ? "grabbing" : "grab",
+        // Perspective on the root gives the 3D stage for all tiles
+        perspective: "900px",
+        perspectiveOrigin: "50% 50%",
+      }}
     >
       {/* Dot grid background */}
       <div
@@ -223,18 +273,22 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             top:        t.top,
             width:      CARD_W,
             height:     CARD_H,
-            transform:  `rotate(${t.rotate}deg)`,
+            // Cloth warp: rotateX/Y per-tile + base random tilt
+            transform:  `rotateX(${t.rx}deg) rotateY(${t.ry}deg) rotate(${t.rotate}deg)`,
             willChange: "left, top, transform",
             cursor:     "pointer",
+            transformStyle: "preserve-3d",
             transition: "transform 0.28s cubic-bezier(0.34,1.56,0.64,1)",
           }}
           onMouseEnter={e => {
-            (e.currentTarget as HTMLDivElement).style.transform = "rotate(0deg) scale(1.07)";
-            (e.currentTarget as HTMLDivElement).style.zIndex    = "20";
+            (e.currentTarget as HTMLDivElement).style.transform =
+              `rotateX(${t.rx}deg) rotateY(${t.ry}deg) rotate(0deg) scale(1.07)`;
+            (e.currentTarget as HTMLDivElement).style.zIndex = "20";
           }}
           onMouseLeave={e => {
-            (e.currentTarget as HTMLDivElement).style.transform = `rotate(${t.rotate}deg) scale(1)`;
-            (e.currentTarget as HTMLDivElement).style.zIndex    = "";
+            (e.currentTarget as HTMLDivElement).style.transform =
+              `rotateX(${t.rx}deg) rotateY(${t.ry}deg) rotate(${t.rotate}deg) scale(1)`;
+            (e.currentTarget as HTMLDivElement).style.zIndex = "";
           }}
         >
           <div style={{
@@ -300,7 +354,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           ))}
         </div>
 
-        {/* MOBILE: pill button that opens full-screen overlay */}
+        {/* MOBILE: pill button */}
         <div className="flex md:hidden" data-collection-menu>
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
