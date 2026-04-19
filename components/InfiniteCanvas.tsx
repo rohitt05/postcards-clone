@@ -1,24 +1,33 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
-import { useSpring, useMotionValue, motion, useTransform } from "framer-motion";
-import { postcards, Collection } from "@/data/postcards";
+import { useRef, useState, useEffect } from "react";
+import { postcards, Collection, Postcard } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
 
-function seededRandom(seed: number) {
-  const x = Math.sin(seed + 1) * 10000;
+// ─── constants ───────────────────────────────────────────────────────────────
+const CARD_W = 154;
+const CARD_H = 210;
+const GAP_X = 20;
+const GAP_Y = 20;
+const CELL_W = CARD_W + GAP_X;
+const CELL_H = CARD_H + GAP_Y;
+// How many extra tiles beyond viewport edge
+const BUFFER = 2;
+// Per-column downward drift speed (px/s)
+const SPEEDS = [22, 18, 26, 20, 24, 17, 23, 21, 19, 25];
+
+function seeded(n: number) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 }
 
-const CARD_W = 150;
-const CARD_H = 200;
-const COL_GAP = 24;
-const ROW_GAP = 24;
-const CELL_W = CARD_W + COL_GAP;
-const CELL_H = CARD_H + ROW_GAP;
-
-// How many tiles to render around viewport (extra buffer)
-const BUFFER = 3;
+interface Tile {
+  key: string;
+  screenX: number;
+  screenY: number;
+  rotate: number;
+  card: Postcard;
+}
 
 interface Props {
   activeCollection: Collection;
@@ -26,149 +35,336 @@ interface Props {
 }
 
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
-  const [selected, setSelected] = useState<(typeof postcards)[0] | null>(null);
-  const [vpSize, setVpSize] = useState({ w: 1440, h: 900 });
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [selected, setSelected] = useState<Postcard | null>(null);
+  const [tiles, setTiles] = useState<Tile[]>([]);
 
-  // Raw pan (no spring) for tile calculation
-  const rawPanX = useRef(0);
-  const rawPanY = useRef(0);
-
-  // Spring pan for smooth rendering
-  const panX = useMotionValue(0);
-  const panY = useMotionValue(0);
-  const springX = useSpring(panX, { stiffness: 80, damping: 18, mass: 1 });
-  const springY = useSpring(panY, { stiffness: 80, damping: 18, mass: 1 });
-
+  // Spring physics state
+  const pan = useRef({ x: 0, y: 0 });          // target (raw drag)
+  const vel = useRef({ x: 0, y: 0 });          // spring velocity
+  const disp = useRef({ x: 0, y: 0 });         // displayed position (spring follows pan)
+  const colOffsets = useRef<number[]>(new Array(20).fill(0));
+  const lastTime = useRef(0);
   const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
   const didDrag = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-
-  // Tick for vertical auto-scroll per column
-  const tickRef = useRef(0);
-  const autoOffsets = useRef<number[]>([]);
-  const rafRef = useRef<number>(0);
-  const lastTime = useRef<number>(0);
-
-  // Column speeds in px/sec
-  const COL_SPEEDS = [28, 23, 32, 26, 29, 22, 31, 27, 24, 30];
-
-  useEffect(() => {
-    const update = () => {
-      setVpSize({ w: window.innerWidth, h: window.innerHeight });
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  // Auto-scroll animation
-  useEffect(() => {
-    const cols = Math.ceil(vpSize.w / CELL_W) + BUFFER * 2 + 2;
-    autoOffsets.current = new Array(cols).fill(0);
-    lastTime.current = performance.now();
-
-    const animate = (now: number) => {
-      const dt = (now - lastTime.current) / 1000;
-      lastTime.current = now;
-      autoOffsets.current = autoOffsets.current.map((o, i) => o + COL_SPEEDS[i % COL_SPEEDS.length] * dt);
-      tickRef.current += 1;
-      rafRef.current = requestAnimationFrame(animate);
-    };
-    rafRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [vpSize.w]);
-
-  // Global drag
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      isDragging.current = true;
-      didDrag.current = false;
-      lastPos.current = { x: e.clientX, y: e.clientY };
-    };
-    const onMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      const dx = e.clientX - lastPos.current.x;
-      const dy = e.clientY - lastPos.current.y;
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDrag.current = true;
-      rawPanX.current += dx;
-      rawPanY.current += dy;
-      lastPos.current = { x: e.clientX, y: e.clientY };
-      panX.set(rawPanX.current);
-      panY.set(rawPanY.current);
-    };
-    const onUp = () => { isDragging.current = false; };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [panX, panY]);
-
-  useEffect(() => {
-    const onStart = (e: TouchEvent) => {
-      if (e.touches.length === 1)
-        lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    };
-    const onMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const dx = e.touches[0].clientX - lastPos.current.x;
-      const dy = e.touches[0].clientY - lastPos.current.y;
-      rawPanX.current += dx;
-      rawPanY.current += dy;
-      lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      panX.set(rawPanX.current);
-      panY.set(rawPanY.current);
-    };
-    window.addEventListener("touchstart", onStart);
-    window.addEventListener("touchmove", onMove);
-    return () => {
-      window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchmove", onMove);
-    };
-  }, [panX, panY]);
+  const rafId = useRef(0);
+  const vpSize = useRef({ w: 1440, h: 900 });
 
   const filtered = activeCollection === "all"
     ? postcards
     : postcards.filter(p => p.collection === activeCollection);
 
-  const collections: Collection[] = ["all", "spring", "summer", "autumn", "winter"];
+  // ── compute tiles from current disp + colOffsets ─────────────────────────
+  function buildTiles(dx: number, dy: number, offs: number[]) {
+    const { w, h } = vpSize.current;
+    const cols = Math.ceil(w / CELL_W) + BUFFER * 2 + 1;
+    const rows = Math.ceil(h / CELL_H) + BUFFER * 2 + 1;
 
-  // Compute visible tile grid based on current pan
-  const colCount = Math.ceil(vpSize.w / CELL_W) + BUFFER * 2 + 2;
-  const rowCount = Math.ceil(vpSize.h / CELL_H) + BUFFER * 2 + 2;
+    const startCol = Math.floor(-dx / CELL_W) - BUFFER;
+    const startRow = Math.floor(-dy / CELL_H) - BUFFER;
+
+    const next: Tile[] = [];
+    for (let ci = 0; ci < cols; ci++) {
+      const col = startCol + ci;
+      const colOff = offs[((col % 20) + 20) % 20];
+      const stagger = (((col % 2) + 2) % 2) === 1 ? CELL_H * 0.5 : 0;
+
+      for (let ri = 0; ri < rows; ri++) {
+        const row = startRow + ri;
+
+        // World Y with auto-scroll offset, then mod-wrapped so it tiles seamlessly
+        const worldY = row * CELL_H + stagger + colOff;
+        // Modulo wrap: snap worldY into the repeating tile band
+        const tileRows = rows;
+        const bandH = tileRows * CELL_H;
+        const wrappedY = ((worldY % bandH) + bandH) % bandH + Math.floor(worldY / bandH) * bandH;
+
+        const screenX = col * CELL_W + dx;
+        const screenY = worldY + dy;
+
+        const seed = (Math.abs(col * 2147483647 + row * 16807)) % 999983;
+        const rotate = (seeded(seed) - 0.5) * 7;
+        const cardIdx = Math.abs((col * 7 + row * 13) % filtered.length);
+        const card = filtered[cardIdx];
+
+        next.push({
+          key: `${col}:${row}`,
+          screenX,
+          screenY,
+          rotate,
+          card,
+        });
+      }
+    }
+    setTiles(next);
+  }
+
+  // ── RAF loop ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const STIFFNESS = 0.08;
+    const DAMPING   = 0.78;
+
+    lastTime.current = performance.now();
+
+    function loop(now: number) {
+      const dt = Math.min((now - lastTime.current) / 1000, 0.05);
+      lastTime.current = now;
+
+      // Auto-scroll per column
+      colOffsets.current = colOffsets.current.map((o, i) =>
+        o + SPEEDS[i % SPEEDS.length] * dt
+      );
+
+      // Spring: disp chases pan
+      if (!isDragging.current) {
+        const fx = (pan.current.x - disp.current.x) * STIFFNESS;
+        const fy = (pan.current.y - disp.current.y) * STIFFNESS;
+        vel.current.x = vel.current.x * DAMPING + fx;
+        vel.current.y = vel.current.y * DAMPING + fy;
+        disp.current.x += vel.current.x;
+        disp.current.y += vel.current.y;
+      } else {
+        disp.current.x = pan.current.x;
+        disp.current.y = pan.current.y;
+        vel.current.x = 0;
+        vel.current.y = 0;
+      }
+
+      buildTiles(disp.current.x, disp.current.y, [...colOffsets.current]);
+      rafId.current = requestAnimationFrame(loop);
+    }
+
+    rafId.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length, activeCollection]);
+
+  // ── viewport size ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const update = () => { vpSize.current = { w: window.innerWidth, h: window.innerHeight }; };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // ── global pointer drag ───────────────────────────────────────────────────
+  useEffect(() => {
+    const down = (e: MouseEvent) => {
+      isDragging.current = true;
+      didDrag.current = false;
+      dragStart.current = { x: e.clientX - pan.current.x, y: e.clientY - pan.current.y };
+    };
+    const move = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const nx = e.clientX - dragStart.current.x;
+      const ny = e.clientY - dragStart.current.y;
+      if (Math.abs(nx - pan.current.x) > 3 || Math.abs(ny - pan.current.y) > 3)
+        didDrag.current = true;
+      pan.current = { x: nx, y: ny };
+    };
+    const up = () => { isDragging.current = false; };
+    window.addEventListener("mousedown", down);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup",   up);
+    return () => {
+      window.removeEventListener("mousedown", down);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup",   up);
+    };
+  }, []);
+
+  // ── touch drag ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      isDragging.current = true;
+      didDrag.current = false;
+      dragStart.current = {
+        x: e.touches[0].clientX - pan.current.x,
+        y: e.touches[0].clientY - pan.current.y,
+      };
+    };
+    const move = (e: TouchEvent) => {
+      if (!isDragging.current || e.touches.length !== 1) return;
+      pan.current = {
+        x: e.touches[0].clientX - dragStart.current.x,
+        y: e.touches[0].clientY - dragStart.current.y,
+      };
+      didDrag.current = true;
+    };
+    const end = () => { isDragging.current = false; };
+    window.addEventListener("touchstart", start, { passive: true });
+    window.addEventListener("touchmove",  move,  { passive: true });
+    window.addEventListener("touchend",   end);
+    return () => {
+      window.removeEventListener("touchstart", start);
+      window.removeEventListener("touchmove",  move);
+      window.removeEventListener("touchend",   end);
+    };
+  }, []);
+
+  const collections: Collection[] = ["all", "spring", "summer", "autumn", "winter"];
 
   return (
     <div
-      className="absolute inset-0 overflow-hidden"
-      style={{ background: "#F0EDE6", cursor: isDragging.current ? "grabbing" : "grab" }}
+      ref={canvasRef}
+      className="absolute inset-0 overflow-hidden select-none"
+      style={{
+        background: "#EDEAE3",
+        cursor: isDragging.current ? "grabbing" : "grab",
+      }}
     >
-      {/* The infinite tiled world */}
-      <InfiniteTileWorld
-        springX={springX}
-        springY={springY}
-        rawPanX={rawPanX}
-        rawPanY={rawPanY}
-        autoOffsets={autoOffsets}
-        tickRef={tickRef}
-        colCount={colCount}
-        rowCount={rowCount}
-        filtered={filtered}
-        didDrag={didDrag}
-        onSelect={setSelected}
+      {/* Subtle dot grid */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.09) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+          backgroundPosition: `${disp.current.x % 32}px ${disp.current.y % 32}px`,
+        }}
       />
 
-      {/* Collection filter */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-white/85 backdrop-blur-md rounded-full px-2 py-1.5 shadow-lg border border-black/8">
+      {/* Tile layer */}
+      {tiles.map((t) => (
+        <div
+          key={t.key}
+          onClick={() => { if (!didDrag.current) setSelected(t.card); }}
+          style={{
+            position: "absolute",
+            left: t.screenX,
+            top:  t.screenY,
+            width:  CARD_W,
+            height: CARD_H,
+            transform: `rotate(${t.rotate}deg)`,
+            willChange: "transform",
+            cursor: "pointer",
+            transition: "transform 0.28s cubic-bezier(0.34,1.56,0.64,1)",
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLDivElement).style.transform = `rotate(0deg) scale(1.07)`;
+            (e.currentTarget as HTMLDivElement).style.zIndex = "10";
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLDivElement).style.transform = `rotate(${t.rotate}deg) scale(1)`;
+            (e.currentTarget as HTMLDivElement).style.zIndex = "";
+          }}
+        >
+          {/* Card face */}
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: 18,
+              background: t.card.bg,
+              boxShadow: [
+                "0 1px 2px rgba(0,0,0,0.06)",
+                "0 4px 12px rgba(0,0,0,0.08)",
+                "0 12px 28px rgba(0,0,0,0.06)",
+              ].join(","),
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              padding: "14px 14px 12px",
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
+            {/* Top stamp perforation row */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 44,
+                  border: `1.5px solid ${t.card.textColor}30`,
+                  borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: "0.1em", color: `${t.card.textColor}40`, textTransform: "uppercase" }}>
+                  MONO
+                </span>
+              </div>
+            </div>
+
+            {/* Bottom label */}
+            <div>
+              <p style={{
+                margin: 0,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: t.card.textColor,
+                opacity: 0.5,
+                marginBottom: 2,
+              }}>
+                {t.card.collection} · {t.card.year}
+              </p>
+              <p style={{
+                margin: 0,
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "0.02em",
+                color: t.card.textColor,
+                opacity: 0.85,
+              }}>
+                {t.card.title}
+              </p>
+            </div>
+
+            {/* Watermark circle */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: -30,
+                left: -20,
+                width: 120,
+                height: 120,
+                borderRadius: "50%",
+                border: `1.5px solid ${t.card.textColor}12`,
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        </div>
+      ))}
+
+      {/* Collection filter pill */}
+      <div
+        className="absolute bottom-6 left-1/2 z-30"
+        style={{
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          background: "rgba(255,255,255,0.88)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderRadius: 9999,
+          padding: "5px 6px",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05)",
+        }}
+      >
         {collections.map((c) => (
           <button
             key={c}
             onClick={() => onCollectionChange(c)}
-            className={`px-3 py-1 text-[11px] font-semibold tracking-widest uppercase rounded-full transition-all duration-200 ${
-              activeCollection === c ? "bg-[#111] text-white" : "text-[#111]/50 hover:text-[#111]"
-            }`}
+            style={{
+              padding: "5px 14px",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              borderRadius: 9999,
+              border: "none",
+              cursor: "pointer",
+              transition: "background 0.2s, color 0.2s",
+              background: activeCollection === c ? "#111" : "transparent",
+              color: activeCollection === c ? "#fff" : "rgba(0,0,0,0.4)",
+            }}
           >
             {c}
           </button>
@@ -176,117 +372,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       </div>
 
       <PostcardModal card={selected} onClose={() => setSelected(null)} />
-    </div>
-  );
-}
-
-// Separate component so it can use useAnimationFrame-style re-render
-function InfiniteTileWorld({
-  springX, springY, rawPanX, rawPanY,
-  autoOffsets, tickRef, colCount, rowCount,
-  filtered, didDrag, onSelect
-}: any) {
-  const [, forceRender] = useState(0);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    const loop = () => {
-      forceRender(t => t + 1);
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
-
-  const px = rawPanX.current;
-  const py = rawPanY.current;
-
-  // Origin tile index (top-left visible tile)
-  const startCol = Math.floor(-px / CELL_W) - BUFFER;
-  const startRow = Math.floor(-py / CELL_H) - BUFFER;
-
-  const tiles: JSX.Element[] = [];
-
-  for (let ci = 0; ci < colCount; ci++) {
-    const col = startCol + ci;
-    const autoOffset = autoOffsets.current[((col % colCount) + colCount) % colCount] || 0;
-    const stagger = col % 2 === 1 ? CELL_H / 2 : 0;
-
-    for (let ri = 0; ri < rowCount; ri++) {
-      const row = startRow + ri;
-
-      // World position before pan
-      const wx = col * CELL_W;
-      // Vertical: combine row position + auto-scroll offset, mod by total rows so it wraps
-      const totalRows = rowCount;
-      const rawWY = row * CELL_H + stagger + autoOffset;
-      // Wrap wy so cards loop seamlessly in the vertical tile space
-      const wy = rawWY;
-
-      // Screen position
-      const sx = wx + px;
-      const sy = wy + py;
-
-      const seed = ((col * 31 + row * 17) & 0xffffff);
-      const postcard = filtered[((Math.abs(col * 7 + row * 13)) % filtered.length)];
-      const rotate = (seededRandom(seed) - 0.5) * 8;
-
-      tiles.push(
-        <div
-          key={`${col}-${row}`}
-          style={{
-            position: "absolute",
-            left: sx,
-            top: sy,
-            width: CARD_W,
-            height: CARD_H,
-            transform: `rotate(${rotate}deg)`,
-            willChange: "transform",
-          }}
-          onClick={() => { if (!didDrag.current) onSelect(postcard); }}
-        >
-          <div
-            style={{
-              width: CARD_W,
-              height: CARD_H,
-              borderRadius: 16,
-              background: postcard.bg,
-              boxShadow: "0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)",
-              cursor: "pointer",
-              transition: "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease",
-              display: "flex",
-              alignItems: "flex-end",
-              padding: 12,
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLDivElement).style.transform = "scale(1.06)";
-              (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 36px rgba(0,0,0,0.16)";
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-              (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)";
-            }}
-          >
-            <p style={{
-              color: postcard.textColor,
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              opacity: 0.65,
-              margin: 0,
-            }}>
-              {postcard.title}
-            </p>
-          </div>
-        </div>
-      );
-    }
-  }
-
-  return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-      {tiles}
     </div>
   );
 }
