@@ -25,6 +25,7 @@ function ViewPostcard() {
 
   const accent = card.textColor;
   const bg = card.bg;
+  const hasImage = !!payload.image;
 
   return (
     <div
@@ -40,8 +41,6 @@ function ViewPostcard() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 440 }}>
-
-        {/* Card */}
         <div
           style={{
             background: bg,
@@ -50,66 +49,51 @@ function ViewPostcard() {
             boxShadow: "0 8px 48px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.08)",
           }}
         >
-          {/* Image with fade-out bottom */}
-          <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
-            {payload.image ? (
+          {/* Image section — only rendered if image exists */}
+          {hasImage && (
+            <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
               <img
-                src={payload.image}
+                src={payload.image!}
                 alt="postcard photo"
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               />
-            ) : (
+              {/* Gradient fade: image → card bg */}
               <div
                 style={{
-                  width: "100%", height: "100%",
-                  background: `${accent}10`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  position: "absolute",
+                  bottom: 0, left: 0, right: 0,
+                  height: "55%",
+                  background: `linear-gradient(to bottom, transparent 0%, ${bg} 100%)`,
+                  pointerEvents: "none",
                 }}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" style={{ opacity: 0.25 }}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
+              />
+              {/* Date overlaid on the fade */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "0 22px 18px" }}>
+                <p style={{
+                  color: accent, opacity: 0.45, fontSize: 11, fontWeight: 700,
+                  letterSpacing: "0.18em", textTransform: "uppercase", margin: 0,
+                }}>
+                  {formatDate()}
+                </p>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Gradient fade: image → card bg */}
-            <div
-              style={{
-                position: "absolute",
-                bottom: 0, left: 0, right: 0,
-                height: "55%",
-                background: `linear-gradient(to bottom, transparent 0%, ${bg} 100%)`,
-                pointerEvents: "none",
-              }}
-            />
-
-            {/* Date overlaid on the fade */}
-            <div
-              style={{
-                position: "absolute",
-                bottom: 0, left: 0, right: 0,
-                padding: "0 22px 18px",
-              }}
-            >
+          {/* Date shown at top when no image */}
+          {!hasImage && (
+            <div style={{ padding: "22px 22px 0" }}>
               <p style={{
-                color: accent,
-                opacity: 0.45,
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                margin: 0,
+                color: accent, opacity: 0.4, fontSize: 11, fontWeight: 700,
+                letterSpacing: "0.18em", textTransform: "uppercase", margin: 0,
               }}>
                 {formatDate()}
               </p>
             </div>
-          </div>
+          )}
 
           {/* Message */}
           {payload.message && (
-            <div style={{ padding: "4px 22px 20px" }}>
+            <div style={{ padding: hasImage ? "4px 22px 20px" : "14px 22px 20px" }}>
               <p style={{
                 color: accent, fontSize: 15, lineHeight: 1.7,
                 fontStyle: "italic", opacity: 0.82, margin: 0,
@@ -132,7 +116,7 @@ function ViewPostcard() {
                 letterSpacing: "0.18em", textTransform: "uppercase", margin: "0 0 2px",
               }}>From</p>
               <p style={{ color: accent, fontSize: 14, fontWeight: 700, margin: 0 }}>
-                {payload.senderName || "Anonymous"}
+                {payload.senderName}
               </p>
             </div>
             <div style={{ display: "flex", gap: 4, opacity: 0.15 }}>

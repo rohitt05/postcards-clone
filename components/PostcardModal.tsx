@@ -22,9 +22,13 @@ export default function PostcardModal({ card, onClose }: Props) {
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const MAX_MESSAGE = 1000;
+
+  // Button is disabled unless sender name is filled AND at least message or image exists
+  const canGenerate = senderName.trim().length > 0 && (message.trim().length > 0 || !!image);
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -41,14 +45,14 @@ export default function PostcardModal({ card, onClose }: Props) {
   }, [handleFile]);
 
   const handleSend = async () => {
-    if (!card) return;
+    if (!card || !canGenerate) return;
     setLoading(true);
     try {
       const compressed = image ? await compressImage(image) : null;
       const encoded = encodePayload({
         cardId: card.id,
         message,
-        senderName,
+        senderName: senderName.trim(),
         image: compressed,
       });
       const url = `${window.location.origin}/view?p=${encoded}`;
@@ -75,6 +79,7 @@ export default function PostcardModal({ card, onClose }: Props) {
     setCopied(false);
     setLoading(false);
     setEditingName(false);
+    setNameTouched(false);
     onClose();
   };
 
@@ -82,6 +87,7 @@ export default function PostcardModal({ card, onClose }: Props) {
 
   const accent = card.textColor;
   const bg = card.bg;
+  const showNameError = nameTouched && !senderName.trim();
 
   return (
     <AnimatePresence>
@@ -210,8 +216,8 @@ export default function PostcardModal({ card, onClose }: Props) {
                           <input
                             value={senderName}
                             onChange={(e) => setSenderName(e.target.value)}
-                            onBlur={() => setEditingName(false)}
-                            onKeyDown={(e) => { if (e.key === "Enter") setEditingName(false); }}
+                            onBlur={() => { setEditingName(false); setNameTouched(true); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { setEditingName(false); setNameTouched(true); } }}
                             placeholder="Your name"
                             maxLength={40}
                             autoFocus
@@ -219,21 +225,28 @@ export default function PostcardModal({ card, onClose }: Props) {
                               border: "none", outline: "none", background: "transparent",
                               fontSize: 14, fontWeight: 600, color: accent,
                               fontFamily: "inherit", width: 150, padding: 0,
-                              borderBottom: `1.5px solid ${accent}40`,
+                              borderBottom: `1.5px solid ${showNameError ? "#e05252" : accent + "40"}`,
                             }}
                           />
                         ) : (
                           <button
-                            onClick={() => setEditingName(true)}
+                            onClick={() => { setEditingName(true); setNameTouched(true); }}
                             style={{ border: "none", background: "transparent", cursor: "text", padding: 0, display: "flex", alignItems: "center", gap: 5 }}
                           >
-                            <span style={{ fontSize: 14, fontWeight: 600, color: accent, opacity: senderName ? 1 : 0.32 }}>
-                              {senderName || "Your name"}
+                            <span style={{
+                              fontSize: 14, fontWeight: 600,
+                              color: showNameError ? "#e05252" : accent,
+                              opacity: senderName ? 1 : 0.4,
+                            }}>
+                              {senderName || "Your name *"}
                             </span>
-                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" style={{ opacity: 0.32 }}>
+                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={showNameError ? "#e05252" : accent} strokeWidth="1.8" strokeLinecap="round" style={{ opacity: 0.4 }}>
                               <path d="M8 1l3 3-7 7H1V8l7-7z" />
                             </svg>
                           </button>
+                        )}
+                        {showNameError && (
+                          <p style={{ color: "#e05252", fontSize: 10, marginTop: 3, fontWeight: 600 }}>Required to send</p>
                         )}
                       </div>
 
@@ -248,15 +261,15 @@ export default function PostcardModal({ card, onClose }: Props) {
                           }}
                         >Close</button>
                         <button
-                          onClick={handleSend}
-                          disabled={(!message.trim() && !image) || loading}
+                          onClick={() => { setNameTouched(true); if (canGenerate) handleSend(); }}
+                          disabled={loading}
                           style={{
                             fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
                             textTransform: "uppercase", padding: "8px 18px",
                             borderRadius: 9999, border: "none",
                             background: accent, color: bg,
-                            cursor: (!message.trim() && !image) || loading ? "not-allowed" : "pointer",
-                            opacity: (!message.trim() && !image) ? 0.3 : 1,
+                            cursor: canGenerate && !loading ? "pointer" : "not-allowed",
+                            opacity: canGenerate ? 1 : 0.3,
                             transition: "opacity 0.2s",
                             display: "flex", alignItems: "center", gap: 6,
                           }}
