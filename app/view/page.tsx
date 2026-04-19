@@ -44,57 +44,84 @@ function ViewPostcard() {
             boxShadow: "0 8px 48px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.08)",
           }}
         >
-          {/* Image */}
-          {payload.image ? (
-            <div style={{ width: "100%", aspectRatio: "4/3", overflow: "hidden" }}>
+          {/* Image with fade-out bottom */}
+          <div style={{ position: "relative", width: "100%", aspectRatio: "4/3" }}>
+            {payload.image ? (
               <img
                 src={payload.image}
                 alt="postcard photo"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               />
-            </div>
-          ) : (
+            ) : (
+              <div
+                style={{
+                  width: "100%", height: "100%",
+                  background: `${accent}10`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" style={{ opacity: 0.25 }}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              </div>
+            )}
+
+            {/* Gradient fade: image → card bg */}
             <div
               style={{
-                width: "100%", aspectRatio: "4/3",
-                background: `${accent}10`,
-                display: "flex", alignItems: "center", justifyContent: "center",
+                position: "absolute",
+                bottom: 0, left: 0, right: 0,
+                height: "55%",
+                background: `linear-gradient(to bottom, transparent 0%, ${bg} 100%)`,
+                pointerEvents: "none",
+              }}
+            />
+
+            {/* Card identity overlaid on the fade */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0, left: 0, right: 0,
+                padding: "0 22px 18px",
+                display: "flex", alignItems: "flex-end", justifyContent: "space-between",
               }}
             >
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" style={{ opacity: 0.25 }}>
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </div>
-          )}
-
-          {/* Card identity strip */}
-          <div style={{ padding: "18px 22px 6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <p style={{ color: accent, opacity: 0.4, fontSize: 10, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", margin: 0 }}>
-                {card.collection} · {card.year}
-              </p>
-              <p style={{ color: accent, fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", margin: "2px 0 0" }}>
-                {card.title}
-              </p>
-            </div>
-            <div style={{
-              width: 38, height: 46, border: `1.5px solid ${accent}28`,
-              borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
-              <span style={{ fontSize: 6, fontWeight: 800, letterSpacing: "0.15em", color: `${accent}38`, textTransform: "uppercase" }}>MONO</span>
+              <div>
+                <p style={{
+                  color: accent, opacity: 0.5, fontSize: 10, fontWeight: 700,
+                  letterSpacing: "0.2em", textTransform: "uppercase", margin: 0,
+                }}>
+                  {card.collection} · {card.year}
+                </p>
+                <p style={{
+                  color: accent, fontSize: 20, fontWeight: 800,
+                  letterSpacing: "-0.01em", margin: "3px 0 0",
+                }}>
+                  {card.title}
+                </p>
+              </div>
+              <div style={{
+                width: 38, height: 46,
+                border: `1.5px solid ${accent}30`,
+                borderRadius: 5,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, marginLeft: 12,
+              }}>
+                <span style={{
+                  fontSize: 6, fontWeight: 800, letterSpacing: "0.15em",
+                  color: `${accent}45`, textTransform: "uppercase",
+                }}>MONO</span>
+              </div>
             </div>
           </div>
 
-          {/* Divider */}
-          <div style={{ height: 1, background: `${accent}14`, margin: "10px 22px" }} />
-
-          {/* Message */}
+          {/* Message — no divider, flows naturally below the fade */}
           {payload.message && (
-            <div style={{ padding: "4px 22px 18px" }}>
+            <div style={{ padding: "4px 22px 20px" }}>
               <p style={{
-                color: accent, fontSize: 15, lineHeight: 1.65,
+                color: accent, fontSize: 15, lineHeight: 1.7,
                 fontStyle: "italic", opacity: 0.82, margin: 0,
                 whiteSpace: "pre-wrap",
               }}>
@@ -110,12 +137,14 @@ function ViewPostcard() {
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div>
-              <p style={{ color: accent, opacity: 0.35, fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", margin: "0 0 2px" }}>From</p>
+              <p style={{
+                color: accent, opacity: 0.35, fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.18em", textTransform: "uppercase", margin: "0 0 2px",
+              }}>From</p>
               <p style={{ color: accent, fontSize: 14, fontWeight: 700, margin: 0 }}>
                 {payload.senderName || "Anonymous"}
               </p>
             </div>
-            {/* Postmarks decoration */}
             <div style={{ display: "flex", gap: 4, opacity: 0.15 }}>
               {[24, 18, 20].map((s, i) => (
                 <div key={i} style={{
