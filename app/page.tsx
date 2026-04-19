@@ -41,7 +41,7 @@ function PostcardsApp() {
         {/* Nav */}
         <nav className="pointer-events-auto flex items-center gap-5">
           <a
-            href="#"
+            href="/about"
             className="hidden sm:block transition-colors duration-200 hover:text-ink text-ink/50"
             style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}
           >
