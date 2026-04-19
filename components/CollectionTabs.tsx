@@ -4,12 +4,17 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import { Collection } from "@/data/postcards";
 
-const tabs: { label: string; value: Collection }[] = [
-  { label: "All", value: "all" },
-  { label: "Spring", value: "spring" },
-  { label: "Summer", value: "summer" },
-  { label: "Autumn", value: "autumn" },
-  { label: "Winter", value: "winter" },
+const tabs: { label: string; value: Collection; emoji: string }[] = [
+  { label: "All",           value: "all",           emoji: "✦" },
+  { label: "Spring",        value: "spring",        emoji: "🌸" },
+  { label: "Summer",        value: "summer",        emoji: "☀️" },
+  { label: "Autumn",        value: "autumn",        emoji: "🍂" },
+  { label: "Winter",        value: "winter",        emoji: "❄️" },
+  { label: "Love",          value: "love",          emoji: "❤️" },
+  { label: "Friendship",    value: "friendship",    emoji: "🤝" },
+  { label: "Birthday",      value: "birthday",      emoji: "🎂" },
+  { label: "Easter",        value: "easter",        emoji: "🐣" },
+  { label: "Long Distance", value: "long-distance", emoji: "✈️" },
 ];
 
 interface Props {
@@ -19,13 +24,13 @@ interface Props {
 
 export default function CollectionTabs({ active, onChange }: Props) {
   return (
-    <div className="flex items-center gap-1 px-6 md:px-12 py-5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex items-center gap-1.5 px-6 md:px-12 py-5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => (
         <button
           key={tab.value}
           onClick={() => onChange(tab.value)}
           className={clsx(
-            "relative px-4 py-1.5 text-xs tracking-widest uppercase rounded-full transition-colors duration-200",
+            "relative flex items-center gap-1.5 px-4 py-1.5 text-xs tracking-widest uppercase rounded-full transition-colors duration-200 whitespace-nowrap",
             active === tab.value ? "text-paper bg-ink" : "text-muted hover:text-ink"
           )}
         >
@@ -36,6 +41,7 @@ export default function CollectionTabs({ active, onChange }: Props) {
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
           )}
+          <span className="text-sm leading-none">{tab.emoji}</span>
           {tab.label}
         </button>
       ))}

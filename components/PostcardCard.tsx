@@ -21,29 +21,48 @@ export default function PostcardCard({ card, onClick, index }: Props) {
       className="cursor-pointer group"
     >
       <div
-        className="relative w-full aspect-[3/4] rounded-2xl flex flex-col justify-end p-6 shadow-md group-hover:shadow-xl transition-shadow duration-300 overflow-hidden"
+        className="relative w-full aspect-[3/4] rounded-2xl flex flex-col justify-end shadow-md group-hover:shadow-xl transition-shadow duration-300 overflow-hidden"
         style={{ backgroundColor: card.bg }}
       >
+        {/* Illustration */}
+        {card.image && (
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <img
+              src={card.image}
+              alt={card.title}
+              className="w-full h-full object-contain"
+              style={{ opacity: 0.82 }}
+              loading="lazy"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          </div>
+        )}
+
+        {/* Bottom gradient */}
         <div
-          className="absolute top-5 right-5 w-2 h-2 rounded-full opacity-40"
-          style={{ backgroundColor: card.textColor }}
+          className="absolute inset-x-0 bottom-0 h-28 z-10"
+          style={{
+            background: `linear-gradient(to top, ${card.bg}ee 40%, ${card.bg}00)`,
+          }}
         />
 
+        {/* Stamp corner */}
         <div
-          className="absolute top-4 right-4 w-10 h-12 border rounded-sm opacity-20 flex items-center justify-center"
-          style={{ borderColor: card.textColor }}
+          className="absolute top-4 right-4 w-10 h-12 border rounded-sm z-10 flex items-center justify-center"
+          style={{ borderColor: card.textColor, opacity: 0.25 }}
         >
-          <span className="text-[6px]" style={{ color: card.textColor }}>
+          <span className="text-[6px] font-bold tracking-widest" style={{ color: card.textColor }}>
             MONO
           </span>
         </div>
 
-        <div>
+        {/* Text */}
+        <div className="relative z-10 p-5">
           <p
-            className="text-[10px] tracking-widest uppercase mb-1 opacity-60"
-            style={{ color: card.textColor }}
+            className="text-[10px] tracking-widest uppercase mb-1"
+            style={{ color: card.textColor, opacity: 0.55 }}
           >
-            {card.collection}
+            {card.collection.replace("-", " ")}
           </p>
           <h3
             className="text-xl font-semibold leading-tight"
