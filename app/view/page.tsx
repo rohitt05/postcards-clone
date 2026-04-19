@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { getCardById } from "@/lib/encodePostcard";
 import Link from "next/link";
 
@@ -13,30 +13,114 @@ function formatDate(): string {
   });
 }
 
-const BG_SLOTS = [
-  { top: "4%",  left: "-6%",  rotate: -14, scale: 0.82 },
-  { top: "2%",  left: "28%",  rotate:   6, scale: 0.76 },
-  { top: "1%",  right: "-4%", rotate:  13, scale: 0.80 },
-  { top: "28%", left: "-8%",  rotate:  -8, scale: 0.78 },
-  { top: "30%", right: "-7%", rotate:  10, scale: 0.75 },
-  { top: "55%", left: "-5%",  rotate: -12, scale: 0.80 },
-  { top: "58%", right: "-6%", rotate:   9, scale: 0.77 },
-  { top: "72%", left: "20%",  rotate:  -5, scale: 0.74 },
-  { top: "75%", right: "18%", rotate:  15, scale: 0.79 },
-  { top: "80%", left: "-4%",  rotate:  -9, scale: 0.76 },
-  { top: "5%",  left: "55%",  rotate: -11, scale: 0.73 },
-  { top: "45%", left: "38%",  rotate:   7, scale: 0.71 },
-  { top: "62%", left: "52%",  rotate: -16, scale: 0.75 },
-  { top: "18%", left: "14%",  rotate:  12, scale: 0.72 },
-  { top: "88%", right: "-3%", rotate:  -7, scale: 0.74 },
-];
-
 type PostcardData = {
   cardId: string;
   message: string;
   senderName: string;
   images: string[];
 };
+
+function PhotoCarousel({ images, accent, bg }: { images: string[]; accent: string; bg: string }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / el.offsetWidth);
+    setActiveIdx(idx);
+  };
+
+  if (images.length === 0) return null;
+
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      {/* Carousel scroll container */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        style={{
+          display: "flex",
+          overflowX: "auto",
+          scrollSnapType: "x mandatory",
+          scrollBehavior: "smooth",
+          WebkitOverflowScrolling: "touch",
+          msOverflowStyle: "none",
+          scrollbarWidth: "none",
+          borderRadius: 0,
+          aspectRatio: "4/3",
+          width: "100%",
+        }}
+      >
+        <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+        {images.map((src, i) => (
+          <div
+            key={i}
+            style={{
+              flexShrink: 0,
+              width: "100%",
+              height: "100%",
+              scrollSnapAlign: "start",
+              position: "relative",
+            }}
+          >
+            <img
+              src={src}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Left gradient fade */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, bottom: 0, width: 56,
+        background: `linear-gradient(to right, ${bg}cc, transparent)`,
+        pointerEvents: "none", zIndex: 2,
+      }} />
+
+      {/* Right gradient fade */}
+      <div style={{
+        position: "absolute", top: 0, right: 0, bottom: 0, width: 56,
+        background: `linear-gradient(to left, ${bg}cc, transparent)`,
+        pointerEvents: "none", zIndex: 2,
+      }} />
+
+      {/* Bottom gradient fade into card content */}
+      <div style={{
+        position: "absolute", bottom: 0, left: 0, right: 0, height: 64,
+        background: `linear-gradient(to bottom, transparent, ${bg})`,
+        pointerEvents: "none", zIndex: 2,
+      }} />
+
+      {/* Dot indicators */}
+      {images.length > 1 && (
+        <div style={{
+          position: "absolute", bottom: 10, left: 0, right: 0,
+          display: "flex", justifyContent: "center", gap: 5, zIndex: 3,
+        }}>
+          {images.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                scrollRef.current?.scrollTo({ left: i * scrollRef.current.offsetWidth, behavior: "smooth" });
+              }}
+              style={{
+                width: i === activeIdx ? 18 : 6,
+                height: 6, borderRadius: 9999,
+                background: accent,
+                opacity: i === activeIdx ? 0.9 : 0.3,
+                border: "none", cursor: "pointer", padding: 0,
+                transition: "all 0.25s ease",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ViewPostcard() {
   const params = useSearchParams();
@@ -74,69 +158,49 @@ function ViewPostcard() {
       padding: "24px 16px",
       position: "relative",
       overflow: "hidden",
-      background: "rgba(0,0,0,0.72)",
     }}>
 
-      {/* Blurred full-screen bg from first image */}
+      {/* Blurred full-screen bg */}
       {images[0] ? (
         <div style={{
           position: "fixed", inset: 0, zIndex: 0,
           backgroundImage: `url(${images[0]})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
-          filter: "blur(32px) brightness(0.45) saturate(1.3)",
+          filter: "blur(32px) brightness(0.35) saturate(1.3)",
           transform: "scale(1.08)",
         }} />
       ) : (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 0,
-          background: "#1a1916",
-        }} />
+        <div style={{ position: "fixed", inset: 0, zIndex: 0, background: "#1a1916" }} />
       )}
-
-      {/* Scattered photo tiles — viewer only */}
-      {images.map((src, i) => {
-        const slot = BG_SLOTS[i % BG_SLOTS.length];
-        return (
-          <div
-            key={i}
-            style={{
-              position: "fixed",
-              width: 160, height: 120,
-              borderRadius: 14,
-              overflow: "hidden",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-              transform: `rotate(${slot.rotate}deg) scale(${slot.scale})`,
-              transformOrigin: "center center",
-              zIndex: 1,
-              opacity: 0.7,
-              ...(slot.top   ? { top:   slot.top   } : {}),
-              ...(slot.left  ? { left:  slot.left  } : {}),
-              ...(slot.right ? { right: slot.right } : {}),
-            }}
-          >
-            <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          </div>
-        );
-      })}
+      {/* Dark overlay */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 1, background: "rgba(0,0,0,0.38)" }} />
 
       {/* Postcard */}
-      <div style={{ width: "100%", maxWidth: 440, position: "relative", zIndex: 10 }}>
+      <div style={{ width: "100%", maxWidth: 420, position: "relative", zIndex: 10 }}>
         <div style={{
           background: bg,
           borderRadius: 32,
           overflow: "hidden",
-          boxShadow: "0 16px 64px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.2)",
+          boxShadow: "0 16px 64px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.2)",
         }}>
-          <div style={{ padding: "22px 22px 0" }}>
+
+          {/* Photo carousel inside card */}
+          {images.length > 0 && (
+            <PhotoCarousel images={images} accent={accent} bg={bg} />
+          )}
+
+          {/* Date */}
+          <div style={{ padding: images.length > 0 ? "12px 22px 0" : "22px 22px 0" }}>
             <p style={{
               color: accent, opacity: 0.4, fontSize: 11, fontWeight: 700,
               letterSpacing: "0.18em", textTransform: "uppercase", margin: 0,
             }}>{formatDate()}</p>
           </div>
 
+          {/* Message */}
           {data.message && (
-            <div style={{ padding: "14px 22px 20px" }}>
+            <div style={{ padding: "12px 22px 18px" }}>
               <p style={{
                 color: accent, fontSize: 15, lineHeight: 1.7,
                 fontStyle: "italic", opacity: 0.82, margin: 0,
@@ -145,6 +209,7 @@ function ViewPostcard() {
             </div>
           )}
 
+          {/* Footer */}
           <div style={{
             padding: "12px 22px 20px",
             borderTop: `1px solid ${accent}12`,
@@ -167,6 +232,7 @@ function ViewPostcard() {
           </div>
         </div>
 
+        {/* Back link */}
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Link href="/" style={{
             display: "inline-flex", alignItems: "center", gap: 6,
@@ -174,7 +240,7 @@ function ViewPostcard() {
             textTransform: "uppercase", textDecoration: "none",
             color: "rgba(255,255,255,0.5)",
             padding: "8px 18px", borderRadius: 9999,
-            background: "rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.08)",
             backdropFilter: "blur(12px)",
             boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
           }}>
