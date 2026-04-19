@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Postcard } from "@/data/postcards";
 import { useState, useRef, useCallback } from "react";
-import { compressImage, encodePayload } from "@/lib/encodePostcard";
+import { compressImage } from "@/lib/encodePostcard";
 
 interface Props {
   card: Postcard | null;
@@ -26,6 +26,7 @@ export default function PostcardModal({ card, onClose }: Props) {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
+  const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canGenerate = senderName.trim().length > 0 && (message.trim().length > 0 || images.length > 0);
@@ -54,17 +55,31 @@ export default function PostcardModal({ card, onClose }: Props) {
   const handleSend = async () => {
     if (!card || !canGenerate) return;
     setLoading(true);
+    setError("");
     try {
       const compressed = await Promise.all(images.map(compressImage));
-      const encoded = encodePayload({
-        cardId: card.id,
-        message,
-        senderName: senderName.trim(),
-        image: compressed[0] ?? null,
-        images: compressed,
+
+      const res = await fetch('/api/postcard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardId: card.id,
+          message,
+          senderName: senderName.trim(),
+          images: compressed,
+        }),
       });
-      setShareUrl(`${window.location.origin}/view?p=${encoded}`);
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Failed to save postcard');
+      }
+
+      const { id } = await res.json();
+      setShareUrl(`${window.location.origin}/view?id=${id}`);
       setStep("share");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -87,6 +102,7 @@ export default function PostcardModal({ card, onClose }: Props) {
     setLoading(false);
     setEditingName(false);
     setNameTouched(false);
+    setError("");
     onClose();
   };
 
@@ -99,7 +115,7 @@ export default function PostcardModal({ card, onClose }: Props) {
     <AnimatePresence>
       {card && (
         <>
-          {/* Backdrop — clean blur, no scattered images */}
+          {/* Clean backdrop */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -133,7 +149,7 @@ export default function PostcardModal({ card, onClose }: Props) {
             >
               <AnimatePresence mode="wait">
 
-                {/* ── COMPOSE ── */}
+                {/* COMPOSE */}
                 {step === "compose" && (
                   <motion.div
                     key="compose"
@@ -145,8 +161,6 @@ export default function PostcardModal({ card, onClose }: Props) {
                     {/* Image upload strip */}
                     <div style={{ padding: "20px 20px 0" }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-
-                        {/* Thumbnails */}
                         {images.map((src, i) => (
                           <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
                             <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -167,7 +181,6 @@ export default function PostcardModal({ card, onClose }: Props) {
                           </div>
                         ))}
 
-                        {/* Add button */}
                         {images.length < MAX_IMAGES && (
                           <div
                             onClick={() => fileInputRef.current?.click()}
@@ -193,7 +206,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                             {images.length === 0 && (
                               <>
                                 <span style={{ color: accent, opacity: 0.4, fontSize: 13, fontWeight: 600 }}>Add photos</span>
-                                <span style={{ color: accent, opacity: 0.25, fontSize: 11 }}>click or drag &amp; drop · up to {MAX_IMAGES}</span>
+                                <span style={{ color: accent, opacity: 0.25, fontSize: 11 }}>click or drag & drop · up to {MAX_IMAGES}</span>
                               </>
                             )}
                           </div>
@@ -235,6 +248,13 @@ export default function PostcardModal({ card, onClose }: Props) {
                         <span style={{ color: accent, opacity: 0.22, fontSize: 11 }}>{message.length}/{MAX_MESSAGE}</span>
                       </div>
                     </div>
+
+                    {/* Error */}
+                    {error && (
+                      <p style={{ color: "#e05252", fontSize: 12, fontWeight: 600, padding: "0 20px", marginTop: 4 }}>
+                        ⚠ {error}
+                      </p>
+                    )}
 
                     {/* Footer */}
                     <div style={{
@@ -309,10 +329,9 @@ export default function PostcardModal({ card, onClose }: Props) {
                             </svg>
                           ) : (
                             <>
-                              Generate link
+                              Send
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4 20-7z" />
                               </svg>
                             </>
                           )}
@@ -322,7 +341,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                   </motion.div>
                 )}
 
-                {/* ── SHARE ── */}
+                {/* SHARE */}
                 {step === "share" && (
                   <motion.div
                     key="share"

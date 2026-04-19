@@ -1,8 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { decodePayload, getCardById } from "@/lib/encodePostcard";
+import { Suspense, useEffect, useState } from "react";
+import { getCardById } from "@/lib/encodePostcard";
 import Link from "next/link";
 
 function formatDate(): string {
@@ -31,19 +31,39 @@ const BG_SLOTS = [
   { top: "88%", right: "-3%", rotate:  -7, scale: 0.74 },
 ];
 
+type PostcardData = {
+  cardId: string;
+  message: string;
+  senderName: string;
+  images: string[];
+};
+
 function ViewPostcard() {
   const params = useSearchParams();
-  const encoded = params.get("p");
+  const id = params.get("id");
 
-  if (!encoded) return <ErrorScreen message="No postcard found." />;
-  const payload = decodePayload(encoded);
-  if (!payload) return <ErrorScreen message="This link seems broken." />;
-  const card = getCardById(payload.cardId);
-  if (!card) return <ErrorScreen message="Postcard not found." />;
+  const [data, setData] = useState<PostcardData | null>(null);
+  const [fetchError, setFetchError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) { setFetchError("No postcard found."); setLoading(false); return; }
+    fetch(`/api/postcard?id=${id}`)
+      .then(r => r.ok ? r.json() : r.json().then((e: { error?: string }) => Promise.reject(e.error ?? "Not found")))
+      .then((d: PostcardData) => setData(d))
+      .catch((e: string) => setFetchError(typeof e === "string" ? e : "Failed to load postcard."))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return <LoadingScreen />;
+  if (fetchError || !data) return <ErrorScreen message={fetchError || "This link seems broken."} />;
+
+  const card = getCardById(data.cardId);
+  if (!card) return <ErrorScreen message="Postcard style not found." />;
 
   const accent = card.textColor;
   const bg = card.bg;
-  const images = payload.images ?? (payload.image ? [payload.image] : []);
+  const images = data.images ?? [];
 
   return (
     <div style={{
@@ -58,7 +78,7 @@ function ViewPostcard() {
     }}>
 
       {/* Blurred full-screen bg from first image */}
-      {images[0] && (
+      {images[0] ? (
         <div style={{
           position: "fixed", inset: 0, zIndex: 0,
           backgroundImage: `url(${images[0]})`,
@@ -67,17 +87,14 @@ function ViewPostcard() {
           filter: "blur(32px) brightness(0.45) saturate(1.3)",
           transform: "scale(1.08)",
         }} />
-      )}
-      {!images[0] && (
+      ) : (
         <div style={{
           position: "fixed", inset: 0, zIndex: 0,
-          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
           background: "#1a1916",
         }} />
       )}
 
-      {/* Scattered photo tiles */}
+      {/* Scattered photo tiles — viewer only */}
       {images.map((src, i) => {
         const slot = BG_SLOTS[i % BG_SLOTS.length];
         return (
@@ -111,7 +128,6 @@ function ViewPostcard() {
           overflow: "hidden",
           boxShadow: "0 16px 64px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.2)",
         }}>
-          {/* Date */}
           <div style={{ padding: "22px 22px 0" }}>
             <p style={{
               color: accent, opacity: 0.4, fontSize: 11, fontWeight: 700,
@@ -119,18 +135,16 @@ function ViewPostcard() {
             }}>{formatDate()}</p>
           </div>
 
-          {/* Message */}
-          {payload.message && (
+          {data.message && (
             <div style={{ padding: "14px 22px 20px" }}>
               <p style={{
                 color: accent, fontSize: 15, lineHeight: 1.7,
                 fontStyle: "italic", opacity: 0.82, margin: 0,
                 whiteSpace: "pre-wrap",
-              }}>&ldquo;{payload.message}&rdquo;</p>
+              }}>&ldquo;{data.message}&rdquo;</p>
             </div>
           )}
 
-          {/* Footer */}
           <div style={{
             padding: "12px 22px 20px",
             borderTop: `1px solid ${accent}12`,
@@ -142,7 +156,7 @@ function ViewPostcard() {
                 letterSpacing: "0.18em", textTransform: "uppercase", margin: "0 0 2px",
               }}>From</p>
               <p style={{ color: accent, fontSize: 14, fontWeight: 700, margin: 0 }}>
-                {payload.senderName}
+                {data.senderName}
               </p>
             </div>
             <div style={{ display: "flex", gap: 4, opacity: 0.15 }}>
@@ -153,7 +167,6 @@ function ViewPostcard() {
           </div>
         </div>
 
-        {/* Back */}
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Link href="/" style={{
             display: "inline-flex", alignItems: "center", gap: 6,
@@ -172,6 +185,15 @@ function ViewPostcard() {
           </Link>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1916" }}>
+      <div style={{ width: 32, height: 32, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.15)", borderTopColor: "rgba(255,255,255,0.6)", animation: "spin 0.8s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -202,12 +224,7 @@ function ErrorScreen({ message }: { message: string }) {
 
 export default function ViewPage() {
   return (
-    <Suspense fallback={
-      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1916" }}>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.15)", borderTopColor: "rgba(255,255,255,0.6)", animation: "spin 0.8s linear infinite" }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    }>
+    <Suspense fallback={<LoadingScreen />}>
       <ViewPostcard />
     </Suspense>
   );
