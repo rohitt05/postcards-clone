@@ -22,27 +22,27 @@ function seededRandom(seed: number) {
   return x - Math.floor(x);
 }
 
-// Smaller cards
-const CARD_W = 160;
-const CARD_H = 215;
-const COL_GAP = 90;
-const ROW_GAP = 110;
-const COLS = 7;
-const ROWS = 6; // extra row so wrap is never visible
+const CARD_W = 155;
+const CARD_H = 205;
+const COL_GAP = 85;
+const ROW_GAP = 90;
+const COLS = 8;
+const ROWS = 7; // enough rows to always fill viewport
 
 const colStep = CARD_W + COL_GAP;
-const rowStep = CARD_H + ROW_GAP;
+const rowStep = CARD_H + ROW_GAP; // each row wraps within this
 const totalW = COLS * colStep;
-// Full cycle = all rows — this is key to fix the overlap glitch
-const cycleH = ROWS * rowStep;
+const totalH = ROWS * rowStep;
 
 interface CardDef {
   id: string;
   row: number;
   x: number;
-  baseY: number;
+  // centerY is the fixed vertical center of this row slot
+  centerY: number;
   rotate: number;
   imgIndex: number;
+  // Each row drifts at its own independent speed
   driftSpeed: number;
 }
 
@@ -51,16 +51,16 @@ function buildGrid(cards: Postcard[]): CardDef[] {
   let idx = 0;
   for (let row = 0; row < ROWS; row++) {
     const xOffset = row % 2 === 1 ? colStep / 2 : 0;
-    // Slightly different speed per row for parallax
-    const driftSpeed = 16 + row * 3;
+    // Mild parallax: rows drift at slightly different speeds
+    const driftSpeed = 14 + row * 2.5;
     for (let col = 0; col < COLS; col++) {
       const seed = idx * 7 + 13;
       defs.push({
         id: `card-${row}-${col}`,
         row,
         x: col * colStep + xOffset - totalW / 2,
-        // Distribute rows evenly across full cycle, centered at 0
-        baseY: row * rowStep - cycleH / 2,
+        // Rows distributed evenly, centered at origin
+        centerY: row * rowStep - totalH / 2 + rowStep / 2,
         rotate: (seededRandom(seed) - 0.5) * 12,
         imgIndex: idx % CARD_IMAGES.length,
         driftSpeed,
@@ -81,11 +81,9 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const [selected, setSelected] = useState<Postcard | null>(null);
   const [zoom, setZoom] = useState(1);
 
-  // Raw pan target
+  // Springy pan via Framer Motion
   const rawPanX = useRef(0);
   const rawPanY = useRef(0);
-
-  // Springy motion values for pan — this gives the globe/elastic drag feel
   const panX = useMotionValue(0);
   const panY = useMotionValue(0);
   const springX = useSpring(panX, { stiffness: 120, damping: 22, mass: 0.8 });
@@ -95,7 +93,8 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const lastMouse = useRef({ x: 0, y: 0 });
   const lastTouch = useRef<{ x: number; y: number } | null>(null);
 
-  // Drift loop — accumulates over cycleH (full grid height) then resets
+  // ONE shared drift accumulator, wraps over rowStep
+  // Each row multiplies this by its own speed ratio
   const driftRef = useRef(0);
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -105,9 +104,8 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     const loop = (time: number) => {
       if (lastTimeRef.current) {
         const delta = (time - lastTimeRef.current) / 1000;
-        driftRef.current += 20 * delta;
-        // Wrap over full cycle so every row completes one full loop
-        if (driftRef.current >= cycleH) driftRef.current -= cycleH;
+        // Base accumulator — wrap within rowStep so offset stays small
+        driftRef.current = (driftRef.current + 18 * delta) % rowStep;
         setDriftY(driftRef.current);
       }
       lastTimeRef.current = time;
@@ -190,11 +188,11 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Dot grid — uses spring values via inline style */}
-      <motion.div
+      {/* Dot grid */}
+      <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.09) 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)`,
           backgroundSize: `${36 * zoom}px ${36 * zoom}px`,
         }}
       />
@@ -218,19 +216,19 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           const card = allPostcards[i % allPostcards.length];
           const imgSrc = CARD_IMAGES[def.imgIndex];
 
-          // Each row drifts at its own speed (parallax)
-          // Wrap Y within cycleH so cards loop seamlessly with NO overlap
-          const rowDrift = (driftY * (def.driftSpeed / 20)) % cycleH;
-          const rawY = def.baseY + rowDrift;
-          // Correct wrap: mod by cycleH, offset by half so 0 is center
-          const wrappedY = ((rawY + cycleH * 3) % cycleH) - cycleH / 2;
+          // KEY FIX: each row's drift offset wraps within rowStep independently.
+          // (driftY * speedRatio) mod rowStep gives offset in [0, rowStep).
+          // We then center it: subtract rowStep/2 so card oscillates around centerY.
+          const speedRatio = def.driftSpeed / 18;
+          const rowOffset = ((driftY * speedRatio) % rowStep) - rowStep / 2;
+          const finalY = def.centerY + rowOffset;
 
           return (
             <div
               key={def.id}
               className="postcard-item absolute"
               style={{
-                transform: `translate(calc(${def.x}px - 50%), calc(${wrappedY}px - 50%)) rotate(${def.rotate}deg)`,
+                transform: `translate(calc(${def.x}px - 50%), calc(${finalY}px - 50%)) rotate(${def.rotate}deg)`,
                 willChange: "transform",
               }}
               onClick={() => setSelected(card)}
@@ -275,7 +273,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 <div
                   className="absolute bottom-0 left-0 right-0 pointer-events-none"
                   style={{
-                    height: 56,
+                    height: 52,
                     background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)",
                   }}
                 />
