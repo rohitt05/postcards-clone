@@ -31,6 +31,16 @@ interface Props {
   onCollectionChange: (c: Collection) => void;
 }
 
+const COLLECTION_LABELS: Record<Collection, string> = {
+  all: "All",
+  love: "Love",
+  "best-friends": "Best Friends",
+  christmas: "Christmas",
+  easter: "Easter",
+  birthday: "Birthday",
+  "long-distance": "Long Distance",
+};
+
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
   const [selected, setSelected] = useState<Postcard | null>(null);
   const [tiles, setTiles]       = useState<TileData[]>([]);
@@ -178,7 +188,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     };
   }, []);
 
-  const collections: Collection[] = ["all", "spring", "summer", "autumn", "winter"];
+  const collections: Collection[] = ["all", "love", "best-friends", "christmas", "easter", "birthday", "long-distance"];
 
   return (
     <div
@@ -226,19 +236,10 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             padding: "14px 14px 12px",
             overflow: "hidden", position: "relative",
           }}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <div style={{
-                width: 36, height: 44,
-                border: `1.5px solid ${t.card.textColor}28`,
-                borderRadius: 4,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: "0.1em", color: `${t.card.textColor}38`, textTransform: "uppercase" }}>MONO</span>
-              </div>
-            </div>
+            <div />
             <div>
               <p style={{ margin: 0, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: t.card.textColor, opacity: 0.45, marginBottom: 2 }}>
-                {t.card.collection} · {t.card.year}
+                {COLLECTION_LABELS[t.card.collection]}
               </p>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: t.card.textColor, opacity: 0.85 }}>
                 {t.card.title}
@@ -254,6 +255,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         </div>
       ))}
 
+      {/* Tab bar — collection filters */}
       <div className="absolute bottom-6 left-1/2 z-30" style={{
         transform: "translateX(-50%)",
         display: "flex", alignItems: "center", gap: 2,
@@ -270,7 +272,8 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
             transition: "background 0.2s,color 0.2s",
             background: activeCollection === c ? "#111" : "transparent",
             color:      activeCollection === c ? "#fff" : "rgba(0,0,0,0.4)",
-          }}>{c}</button>
+            whiteSpace: "nowrap",
+          }}>{COLLECTION_LABELS[c]}</button>
         ))}
       </div>
 
