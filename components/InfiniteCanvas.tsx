@@ -43,16 +43,6 @@ const COLLECTION_LABELS: Record<Collection, string> = {
   "long-distance": "Long Distance",
 };
 
-const COLLECTION_EMOJIS: Record<Collection, string> = {
-  all: "✦",
-  love: "❤️",
-  "best-friends": "🤝",
-  christmas: "🎄",
-  easter: "🐣",
-  birthday: "🎂",
-  "long-distance": "✈️",
-};
-
 const collections: Collection[] = ["all", "love", "best-friends", "christmas", "easter", "birthday", "long-distance"];
 
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
@@ -218,9 +208,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     };
   }, [menuOpen]);
 
-  const activeLabel = COLLECTION_LABELS[activeCollection];
-  const activeEmoji = COLLECTION_EMOJIS[activeCollection];
-
   return (
     <div
       className="absolute inset-0 overflow-hidden select-none"
@@ -318,162 +305,85 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 transition: "all 0.18s ease",
               }}
             >
-              <span style={{ marginRight: 5, fontSize: 12 }}>{COLLECTION_EMOJIS[c]}</span>
               {COLLECTION_LABELS[c]}
             </button>
           ))}
         </div>
 
-        {/* MOBILE: apps-grid icon button + popover (shown only on mobile) */}
-        <div className="flex md:hidden flex-col items-center" style={{ position: "relative" }}>
-          {/* Popover menu — appears above the button */}
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                key="collection-popover"
-                initial={{ opacity: 0, y: 12, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 12px)",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  background: "rgba(255,255,255,0.96)",
-                  backdropFilter: "blur(24px)",
-                  WebkitBackdropFilter: "blur(24px)",
-                  borderRadius: 20,
-                  padding: "12px",
-                  boxShadow: "0 4px 32px rgba(0,0,0,0.16),0 0 0 1px rgba(0,0,0,0.06)",
-                  width: 240,
-                  zIndex: 50,
-                }}
-              >
-                {/* Small caret / arrow */}
-                <div style={{
-                  position: "absolute", bottom: -7, left: "50%",
-                  transform: "translateX(-50%)",
-                  width: 14, height: 14,
-                  background: "rgba(255,255,255,0.96)",
-                  borderRadius: 2,
-                  rotate: "45deg",
-                  boxShadow: "2px 2px 4px rgba(0,0,0,0.05)",
-                  zIndex: -1,
-                }} />
-
-                {/* Title */}
-                <p style={{
-                  textAlign: "center", margin: "0 0 10px",
-                  fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
-                  textTransform: "uppercase", color: "#8A7A70",
-                  fontFamily: "var(--font-dm-sans)",
-                }}>Collections</p>
-
-                {/* 2-column grid of options */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  {collections.map((c) => {
-                    const isActive = activeCollection === c;
-                    return (
-                      <button
-                        key={c}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCollectionChange(c);
-                          setMenuOpen(false);
-                        }}
-                        style={{
-                          display: "flex", flexDirection: "column",
-                          alignItems: "center", justifyContent: "center",
-                          gap: 4, padding: "10px 6px",
-                          borderRadius: 14, border: "none", cursor: "pointer",
-                          background: isActive ? "#1A1410" : "rgba(0,0,0,0.04)",
-                          color: isActive ? "#F7F2EA" : "#1A1410",
-                          transition: "all 0.15s ease",
-                          fontFamily: "var(--font-dm-sans)",
-                        }}
-                      >
-                        <span style={{ fontSize: 20, lineHeight: 1 }}>{COLLECTION_EMOJIS[c]}</span>
-                        <span style={{
-                          fontSize: 9, fontWeight: 700,
-                          letterSpacing: "0.08em", textTransform: "uppercase",
-                          opacity: isActive ? 1 : 0.7,
-                        }}>{COLLECTION_LABELS[c]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* The apps-grid icon button */}
+        {/* MOBILE: single pill button that opens a full-screen overlay */}
+        <div className="flex md:hidden" data-collection-menu>
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
             style={{
-              width: 48, height: 48,
+              padding: "7px 20px",
               borderRadius: 9999,
               border: "none", cursor: "pointer",
-              background: menuOpen ? "#1A1410" : "rgba(255,255,255,0.92)",
+              background: "rgba(255,255,255,0.92)",
               backdropFilter: "blur(20px)",
               WebkitBackdropFilter: "blur(20px)",
               boxShadow: "0 2px 16px rgba(0,0,0,0.13),0 0 0 1px rgba(0,0,0,0.06)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.2s ease",
-              color: menuOpen ? "#F7F2EA" : "#1A1410",
-              position: "relative",
-            }}
-            aria-label="Browse collections"
-          >
-            {/* Active collection dot indicator */}
-            {activeCollection !== "all" && (
-              <span style={{
-                position: "absolute", top: 8, right: 8,
-                width: 7, height: 7, borderRadius: "50%",
-                background: "#C8896E",
-                boxShadow: "0 0 0 1.5px white",
-              }} />
-            )}
-            {/* Apps grid SVG icon */}
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <rect x="12" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <rect x="2" y="12" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <rect x="12" y="12" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-            </svg>
-          </button>
-
-          {/* Active label pill below button */}
-          {activeCollection !== "all" && (
-            <div style={{
-              marginTop: 6,
-              background: "rgba(255,255,255,0.88)",
-              backdropFilter: "blur(12px)",
-              borderRadius: 9999, padding: "2px 10px",
-              fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-              textTransform: "uppercase", color: "#1A1410",
+              fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.12em", textTransform: "uppercase",
+              color: "#1A1410",
               fontFamily: "var(--font-dm-sans)",
-              boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
-              whiteSpace: "nowrap",
-            }}>
-              {activeEmoji} {activeLabel}
-            </div>
-          )}
+              transition: "all 0.2s ease",
+            }}
+          >
+            {COLLECTION_LABELS[activeCollection]}
+          </button>
         </div>
       </div>
 
-      {/* Postcard count badge */}
-      <div className="absolute bottom-5 right-5 z-30" style={{
-        background: "rgba(255,255,255,0.8)",
-        backdropFilter: "blur(12px)",
-        borderRadius: 9999, padding: "4px 12px",
-        fontSize: 10, fontWeight: 700,
-        letterSpacing: "0.1em", textTransform: "uppercase",
-        color: "#8A7A70", fontFamily: "var(--font-dm-sans)",
-        boxShadow: "0 1px 6px rgba(0,0,0,0.07),0 0 0 1px rgba(0,0,0,0.04)",
-      }}>
-        {filteredRef.current.length} cards
-      </div>
+      {/* MOBILE: full-screen soft overlay with collection names */}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            key="mobile-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={() => setMenuOpen(false)}
+            className="fixed inset-0 md:hidden z-40 flex flex-col items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)" }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}
+            >
+              {collections.map((c, i) => (
+                <motion.button
+                  key={c}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04, duration: 0.2, ease: "easeOut" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCollectionChange(c);
+                    setMenuOpen(false);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "10px 24px",
+                    fontSize: activeCollection === c ? 26 : 22,
+                    fontWeight: activeCollection === c ? 700 : 400,
+                    color: activeCollection === c ? "#1A1410" : "#8A7A70",
+                    fontFamily: "var(--font-cormorant)",
+                    fontStyle: "italic",
+                    letterSpacing: "0.01em",
+                    transition: "all 0.15s ease",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {COLLECTION_LABELS[c]}
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal */}
       <PostcardModal card={selected} onClose={() => setSelected(null)} />
