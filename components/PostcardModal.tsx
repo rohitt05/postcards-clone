@@ -15,25 +15,6 @@ type Step = "compose" | "share";
 const MAX_IMAGES = 15;
 const MAX_MESSAGE = 1000;
 
-// Deterministic scattered positions for bg images
-const BG_SLOTS = [
-  { top: "4%",  left: "-6%",  rotate: -14, scale: 0.82 },
-  { top: "2%",  left: "28%",  rotate:   6, scale: 0.76 },
-  { top: "1%",  right: "-4%", rotate:  13, scale: 0.80 },
-  { top: "28%", left: "-8%",  rotate:  -8, scale: 0.78 },
-  { top: "30%", right: "-7%", rotate:  10, scale: 0.75 },
-  { top: "55%", left: "-5%",  rotate: -12, scale: 0.80 },
-  { top: "58%", right: "-6%", rotate:   9, scale: 0.77 },
-  { top: "72%", left: "20%",  rotate:  -5, scale: 0.74 },
-  { top: "75%", right: "18%", rotate:  15, scale: 0.79 },
-  { top: "80%", left: "-4%",  rotate:  -9, scale: 0.76 },
-  { top: "5%",  left: "55%",  rotate: -11, scale: 0.73 },
-  { top: "45%", left: "38%",  rotate:   7, scale: 0.71 },
-  { top: "62%", left: "52%",  rotate: -16, scale: 0.75 },
-  { top: "18%", left: "14%",  rotate:  12, scale: 0.72 },
-  { top: "88%", right: "-3%", rotate:  -7, scale: 0.74 },
-];
-
 export default function PostcardModal({ card, onClose }: Props) {
   const [images, setImages] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -51,18 +32,15 @@ export default function PostcardModal({ card, onClose }: Props) {
   const showNameError = nameTouched && !senderName.trim();
 
   const handleFiles = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
-    arr.forEach(file => {
-      setImages(prev => {
-        if (prev.length >= MAX_IMAGES) return prev;
+    Array.from(files)
+      .filter(f => f.type.startsWith("image/"))
+      .forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
           setImages(p => p.length < MAX_IMAGES ? [...p, e.target?.result as string] : p);
         };
         reader.readAsDataURL(file);
-        return prev;
       });
-    });
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -121,7 +99,7 @@ export default function PostcardModal({ card, onClose }: Props) {
     <AnimatePresence>
       {card && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — clean blur, no scattered images */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -129,40 +107,8 @@ export default function PostcardModal({ card, onClose }: Props) {
             exit={{ opacity: 0 }}
             onClick={handleClose}
             className="fixed inset-0 z-40"
-            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(10px)" }}
+            style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
           />
-
-          {/* Scattered background images */}
-          <div className="fixed inset-0 z-40 pointer-events-none overflow-hidden">
-            <AnimatePresence>
-              {images.map((src, i) => {
-                const slot = BG_SLOTS[i % BG_SLOTS.length];
-                return (
-                  <motion.div
-                    key={src.slice(-20) + i}
-                    initial={{ opacity: 0, scale: 0.6, rotate: (slot.rotate ?? 0) - 10 }}
-                    animate={{ opacity: 1, scale: slot.scale, rotate: slot.rotate }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    transition={{ type: "spring", stiffness: 260, damping: 22, delay: i * 0.06 }}
-                    style={{
-                      position: "absolute",
-                      width: 160,
-                      height: 120,
-                      borderRadius: 14,
-                      overflow: "hidden",
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
-                      transformOrigin: "center center",
-                      ...(slot.top    ? { top:    slot.top    } : {}),
-                      ...(slot.left   ? { left:   slot.left   } : {}),
-                      ...(slot.right  ? { right:  slot.right  } : {}),
-                    }}
-                  >
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
 
           {/* Modal */}
           <motion.div
@@ -179,7 +125,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                 maxWidth: 440,
                 borderRadius: 32,
                 background: bg,
-                boxShadow: "0 8px 48px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.1)",
+                boxShadow: "0 8px 48px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.1)",
                 overflow: "hidden",
                 maxHeight: "90dvh",
                 overflowY: "auto",
