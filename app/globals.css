@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --background: #F5F0E8;
-  --foreground: #1A1A1A;
+  --background: #F7F2EA;
+  --foreground: #1A1410;
+  --font-cormorant: 'Cormorant Garamond', Georgia, serif;
+  --font-dm-sans: 'DM Sans', system-ui, sans-serif;
 }
 
 * {
@@ -22,11 +24,11 @@ body {
 }
 
 body {
-  font-family: var(--font-inter), Inter, sans-serif;
+  font-family: var(--font-dm-sans);
 }
 
 ::selection {
-  background: #C8A96E;
+  background: #C8896E;
   color: #fff;
 }
 
@@ -35,10 +37,10 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #F5F0E8;
+  background: #F7F2EA;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #C8A96E;
+  background: #C8896E;
   border-radius: 2px;
 }

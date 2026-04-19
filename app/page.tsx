@@ -19,18 +19,37 @@ function PostcardsApp() {
   };
 
   return (
-    <div className="fixed inset-0 bg-paper overflow-hidden">
-      {/* Minimal floating UI overlay */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-5 pointer-events-none">
-        <span className="text-2xl font-black tracking-tight text-ink pointer-events-auto select-none">
-          POSTCARDS.
-        </span>
-        <a
-          href="#"
-          className="text-sm font-medium text-ink/60 hover:text-ink transition-colors pointer-events-auto"
-        >
-          About
-        </a>
+    <div className="fixed inset-0 overflow-hidden" style={{ background: "#F0EBE1" }}>
+      {/* Floating header */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-5 md:px-8 py-4 pointer-events-none">
+        {/* Brand */}
+        <div className="pointer-events-auto flex flex-col leading-none select-none">
+          <span
+            className="text-ink/30 tracking-[0.22em] uppercase"
+            style={{ fontFamily: "var(--font-dm-sans)", fontSize: 9, fontWeight: 500, letterSpacing: "0.22em" }}
+          >
+            a collection by
+          </span>
+          <span
+            className="text-ink"
+            style={{ fontFamily: "var(--font-cormorant)", fontSize: "clamp(22px, 4vw, 34px)", fontWeight: 600, letterSpacing: "0.01em", lineHeight: 1.1, fontStyle: "italic" }}
+          >
+            My Love For You
+          </span>
+        </div>
+
+        {/* Nav */}
+        <nav className="pointer-events-auto flex items-center gap-5">
+          <a
+            href="#"
+            className="hidden sm:block transition-colors duration-200 hover:text-ink text-ink/50"
+            style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}
+          >
+            About
+          </a>
+          {/* Decorative heart */}
+          <span style={{ color: "#C8896E", fontSize: 16, lineHeight: 1, opacity: 0.7 }}>♥</span>
+        </nav>
       </div>
 
       <InfiniteCanvas

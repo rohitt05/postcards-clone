@@ -9,13 +9,15 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-inter)", "Inter", "sans-serif"],
+        display: ["var(--font-cormorant)", "Georgia", "serif"],
+        sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"],
       },
       colors: {
-        paper: "#F5F0E8",
-        ink: "#1A1A1A",
-        muted: "#8A8A8A",
-        accent: "#C8A96E",
+        paper: "#F7F2EA",
+        ink: "#1A1410",
+        muted: "#8A7A70",
+        accent: "#C8896E",
+        blush: "#E8C4B8",
       },
     },
   },
