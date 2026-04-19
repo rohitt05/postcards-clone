@@ -1,28 +1,25 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import { postcards, Collection, Postcard } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
 
-const CARD_W  = 154;
+const CARD_W = 154;
 const CARD_H  = 210;
 const GAP_X   = 22;
 const GAP_Y   = 22;
 const CELL_W  = CARD_W + GAP_X;
 const CELL_H  = CARD_H + GAP_Y;
-const BUFFER  = 2;
 const SPEEDS  = [22, 18, 26, 20, 24, 17, 23, 21, 19, 25];
 
 function seeded(n: number) {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 }
-
-// Proper modulo that always returns positive
 function mod(a: number, b: number) { return ((a % b) + b) % b; }
 
 interface TileData {
-  slotKey: string;   // stable: "slotC:slotR" — never changes
+  slotKey: string;
   left: number;
   top: number;
   rotate: number;
@@ -35,48 +32,35 @@ interface Props {
 }
 
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
-  const canvasRef   = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<Postcard | null>(null);
+  const [tiles, setTiles]       = useState<TileData[]>([]);
 
-  // Physics refs — no React state for the hot path
   const panX  = useRef(0); const panY  = useRef(0);
   const velX  = useRef(0); const velY  = useRef(0);
   const dispX = useRef(0); const dispY = useRef(0);
-  const colOffsets = useRef<Float64Array>(new Float64Array(20));
-  const lastTime   = useRef(0);
-  const isDragging = useRef(false);
-  const didDrag    = useRef(false);
+  const colOffsets  = useRef<Float64Array>(new Float64Array(40));
+  const lastTime    = useRef(0);
+  const isDragging  = useRef(false);
+  const didDrag     = useRef(false);
   const dragAnchorX = useRef(0);
   const dragAnchorY = useRef(0);
-  const rafId      = useRef(0);
-  const vp         = useRef({ w: 1440, h: 900 });
+  const rafId       = useRef(0);
+  const vp          = useRef({ w: 1440, h: 900 });
 
-  // Stable slot grid dimensions — computed once per vp size
-  const colsRef = useRef(0);
-  const rowsRef = useRef(0);
-
-  // The actual rendered tile array — keyed by stable slot
-  const [tiles, setTiles] = useState<TileData[]>([]);
-
-  const filtered = activeCollection === "all"
+  const filteredRef = useRef(postcards);
+  filteredRef.current = activeCollection === "all"
     ? postcards
     : postcards.filter(p => p.collection === activeCollection);
-  const filteredRef = useRef(filtered);
-  filteredRef.current = filtered;
 
-  // ── viewport tracking ────────────────────────────────────────────────────
+  // ── viewport ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const update = () => {
-      vp.current = { w: window.innerWidth, h: window.innerHeight };
-      colsRef.current = Math.ceil(vp.current.w / CELL_W) + BUFFER * 2 + 2;
-      rowsRef.current = Math.ceil(vp.current.h / CELL_H) + BUFFER * 2 + 2;
-    };
+    const update = () => { vp.current = { w: window.innerWidth, h: window.innerHeight }; };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // ── RAF loop ─────────────────────────────────────────────────────────────
+  // ── RAF loop ───────────────────────────────────────────────────────────
   useEffect(() => {
     const STIFFNESS = 0.09;
     const DAMPING   = 0.76;
@@ -86,64 +70,58 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
       const dt = Math.min((now - lastTime.current) / 1000, 0.05);
       lastTime.current = now;
 
-      // Auto-scroll per column
-      for (let i = 0; i < 20; i++)
+      // auto-scroll
+      for (let i = 0; i < 40; i++)
         colOffsets.current[i] += SPEEDS[i % SPEEDS.length] * dt;
 
-      // Spring physics
+      // spring
       if (!isDragging.current) {
-        const fx = (panX.current - dispX.current) * STIFFNESS;
-        const fy = (panY.current - dispY.current) * STIFFNESS;
-        velX.current = velX.current * DAMPING + fx;
-        velY.current = velY.current * DAMPING + fy;
+        velX.current = velX.current * DAMPING + (panX.current - dispX.current) * STIFFNESS;
+        velY.current = velY.current * DAMPING + (panY.current - dispY.current) * STIFFNESS;
         dispX.current += velX.current;
         dispY.current += velY.current;
       } else {
         dispX.current = panX.current;
         dispY.current = panY.current;
-        velX.current = 0;
-        velY.current = 0;
+        velX.current  = 0;
+        velY.current  = 0;
       }
 
-      // Rebuild tile list using stable slot keys
       const dx = dispX.current;
       const dy = dispY.current;
-      const cols = colsRef.current || Math.ceil(vp.current.w / CELL_W) + BUFFER * 2 + 2;
-      const rows = rowsRef.current || Math.ceil(vp.current.h / CELL_H) + BUFFER * 2 + 2;
+      const { w, h } = vp.current;
 
-      // Origin tile (world col/row at top-left of viewport)
-      const originCol = Math.floor(-dx / CELL_W) - BUFFER;
-      const originRow = Math.floor(-dy / CELL_H) - BUFFER;
+      // ── KEY FIX ──────────────────────────────────────────────────────
+      // Compute the world col/row that sits at screen (0,0) — top-left corner.
+      // We add extra BUFFER tiles on every side so there's no bare edge.
+      const EXTRA = 3;
+      const startCol = Math.floor(-dx / CELL_W) - EXTRA;
+      const startRow = Math.floor(-dy / CELL_H) - EXTRA;
+      const colCount  = Math.ceil(w / CELL_W) + EXTRA * 2 + 2;
+      const rowCount  = Math.ceil(h / CELL_H) + EXTRA * 2 + 2;
 
       const next: TileData[] = [];
-      for (let ci = 0; ci < cols; ci++) {
-        const worldCol = originCol + ci;
-        // Stable slot: wraps around the fixed grid width
-        const slotC = mod(worldCol, cols);
-        const colOff = colOffsets.current[mod(worldCol, 20)];
-        const stagger = mod(worldCol, 2) === 1 ? CELL_H * 0.5 : 0;
 
-        for (let ri = 0; ri < rows; ri++) {
-          const worldRow = originRow + ri;
-          const slotR = mod(worldRow, rows);
+      for (let ci = 0; ci < colCount; ci++) {
+        const worldCol = startCol + ci;
+        const slotC    = mod(worldCol, colCount);
+        const colOff   = colOffsets.current[mod(worldCol, 40)];
+        const stagger  = mod(worldCol, 2) === 1 ? CELL_H * 0.5 : 0;
 
-          // Screen position
+        for (let ri = 0; ri < rowCount; ri++) {
+          const worldRow = startRow + ri;
+          const slotR    = mod(worldRow, rowCount);
+
+          // screen-space position
           const left = worldCol * CELL_W + dx;
           const top  = worldRow * CELL_H + stagger + colOff + dy;
 
-          // Card & rotation — determined by world position (stable visual)
-          const seed = mod(worldCol * 2147483647 + worldRow * 16807, 999983);
-          const rotate = (seeded(seed) - 0.5) * 7;
-          const cardIdx = mod(Math.abs(worldCol * 7 + worldRow * 13), filteredRef.current.length);
-          const card = filteredRef.current[cardIdx];
+          const seed    = mod(worldCol * 2147483647 + worldRow * 16807, 999983);
+          const rotate  = (seeded(seed) - 0.5) * 7;
+          const f       = filteredRef.current;
+          const card    = f[mod(Math.abs(worldCol * 7 + worldRow * 13), f.length)];
 
-          next.push({
-            slotKey: `${slotC}:${slotR}`,
-            left,
-            top,
-            rotate,
-            card,
-          });
+          next.push({ slotKey: `${slotC}:${slotR}`, left, top, rotate, card });
         }
       }
 
@@ -156,11 +134,11 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCollection]);
 
-  // ── mouse drag ───────────────────────────────────────────────────────────
+  // ── mouse ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const down = (e: MouseEvent) => {
-      isDragging.current = true;
-      didDrag.current    = false;
+      isDragging.current  = true;
+      didDrag.current     = false;
       dragAnchorX.current = e.clientX - panX.current;
       dragAnchorY.current = e.clientY - panY.current;
     };
@@ -184,19 +162,19 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
     };
   }, []);
 
-  // ── touch drag ───────────────────────────────────────────────────────────
+  // ── touch ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const start = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
-      isDragging.current = true;
-      didDrag.current    = false;
+      isDragging.current  = true;
+      didDrag.current     = false;
       dragAnchorX.current = e.touches[0].clientX - panX.current;
       dragAnchorY.current = e.touches[0].clientY - panY.current;
     };
     const move = (e: TouchEvent) => {
       if (!isDragging.current || e.touches.length !== 1) return;
-      panX.current = e.touches[0].clientX - dragAnchorX.current;
-      panY.current = e.touches[0].clientY - dragAnchorY.current;
+      panX.current    = e.touches[0].clientX - dragAnchorX.current;
+      panY.current    = e.touches[0].clientY - dragAnchorY.current;
       didDrag.current = true;
     };
     const end = () => { isDragging.current = false; };
@@ -214,60 +192,53 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
 
   return (
     <div
-      ref={canvasRef}
       className="absolute inset-0 overflow-hidden select-none"
       style={{ background: "#EDEAE3", cursor: isDragging.current ? "grabbing" : "grab" }}
     >
-      {/* Dot grid */}
+      {/* dot grid */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.07) 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       />
 
-      {/* Tiles — keyed by stable slot, only repositioned never destroyed */}
+      {/* tiles */}
       {tiles.map((t) => (
         <div
           key={t.slotKey}
           onClick={() => { if (!didDrag.current) setSelected(t.card); }}
           style={{
-            position:  "absolute",
-            left:      t.left,
-            top:       t.top,
-            width:     CARD_W,
-            height:    CARD_H,
-            transform: `rotate(${t.rotate}deg)`,
+            position:   "absolute",
+            left:       t.left,
+            top:        t.top,
+            width:      CARD_W,
+            height:     CARD_H,
+            transform:  `rotate(${t.rotate}deg)`,
             willChange: "left, top, transform",
-            cursor:    "pointer",
+            cursor:     "pointer",
             transition: "transform 0.28s cubic-bezier(0.34,1.56,0.64,1)",
           }}
           onMouseEnter={e => {
-            (e.currentTarget as HTMLDivElement).style.transform = `rotate(0deg) scale(1.07)`;
-            (e.currentTarget as HTMLDivElement).style.zIndex = "20";
+            (e.currentTarget as HTMLDivElement).style.transform = "rotate(0deg) scale(1.07)";
+            (e.currentTarget as HTMLDivElement).style.zIndex    = "20";
           }}
           onMouseLeave={e => {
             (e.currentTarget as HTMLDivElement).style.transform = `rotate(${t.rotate}deg) scale(1)`;
-            (e.currentTarget as HTMLDivElement).style.zIndex = "";
+            (e.currentTarget as HTMLDivElement).style.zIndex    = "";
           }}
         >
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: 18,
-              background: t.card.bg,
-              boxShadow: "0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.08), 0 12px 28px rgba(0,0,0,0.05)",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              padding: "14px 14px 12px",
-              overflow: "hidden",
-              position: "relative",
-            }}
-          >
-            {/* Stamp box top-right */}
+          <div style={{
+            width: "100%", height: "100%",
+            borderRadius: 18,
+            background: t.card.bg,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.06),0 4px 12px rgba(0,0,0,0.08),0 12px 28px rgba(0,0,0,0.05)",
+            display: "flex", flexDirection: "column", justifyContent: "space-between",
+            padding: "14px 14px 12px",
+            overflow: "hidden", position: "relative",
+          }}>
+            {/* stamp box */}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <div style={{
                 width: 36, height: 44,
@@ -278,18 +249,16 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                 <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: "0.1em", color: `${t.card.textColor}38`, textTransform: "uppercase" }}>MONO</span>
               </div>
             </div>
-
-            {/* Title label */}
+            {/* label */}
             <div>
               <p style={{ margin: 0, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: t.card.textColor, opacity: 0.45, marginBottom: 2 }}>
                 {t.card.collection} · {t.card.year}
               </p>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: "0.01em", color: t.card.textColor, opacity: 0.85 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: t.card.textColor, opacity: 0.85 }}>
                 {t.card.title}
               </p>
             </div>
-
-            {/* Watermark circle */}
+            {/* watermark */}
             <div style={{
               position: "absolute", bottom: -28, left: -18,
               width: 110, height: 110, borderRadius: "50%",
@@ -300,36 +269,24 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
         </div>
       ))}
 
-      {/* Collection filter */}
-      <div
-        className="absolute bottom-6 left-1/2 z-30"
-        style={{
-          transform: "translateX(-50%)",
-          display: "flex", alignItems: "center", gap: 2,
-          background: "rgba(255,255,255,0.88)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          borderRadius: 9999,
-          padding: "5px 6px",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05)",
-        }}
-      >
+      {/* filter pill */}
+      <div className="absolute bottom-6 left-1/2 z-30" style={{
+        transform: "translateX(-50%)",
+        display: "flex", alignItems: "center", gap: 2,
+        background: "rgba(255,255,255,0.88)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        borderRadius: 9999, padding: "5px 6px",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.08),0 0 0 1px rgba(0,0,0,0.05)",
+      }}>
         {collections.map((c) => (
-          <button
-            key={c}
-            onClick={() => onCollectionChange(c)}
-            style={{
-              padding: "5px 14px",
-              fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.1em", textTransform: "uppercase",
-              borderRadius: 9999, border: "none", cursor: "pointer",
-              transition: "background 0.2s, color 0.2s",
-              background: activeCollection === c ? "#111" : "transparent",
-              color: activeCollection === c ? "#fff" : "rgba(0,0,0,0.4)",
-            }}
-          >
-            {c}
-          </button>
+          <button key={c} onClick={() => onCollectionChange(c)} style={{
+            padding: "5px 14px", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            borderRadius: 9999, border: "none", cursor: "pointer",
+            transition: "background 0.2s,color 0.2s",
+            background: activeCollection === c ? "#111" : "transparent",
+            color:      activeCollection === c ? "#fff" : "rgba(0,0,0,0.4)",
+          }}>{c}</button>
         ))}
       </div>
 
