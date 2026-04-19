@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useSpring, useMotionValue, motion } from "framer-motion";
 import { postcards, Collection } from "@/data/postcards";
 import PostcardModal from "./PostcardModal";
@@ -10,19 +10,19 @@ function seededRandom(seed: number) {
   return x - Math.floor(x);
 }
 
-const CARD_W = 200;
-const CARD_H = 260;
-const COL_GAP = 32;
-const ROW_GAP = 32;
-const COLS = 5;
-const ROWS_PER_SET = 20; // tall enough that loop is never noticed
+const CARD_W = 150;
+const CARD_H = 200;
+const COL_GAP = 24;
+const ROW_GAP = 24;
+const COLS = 7;
+const ROWS_PER_SET = 20;
 
 const colStep = CARD_W + COL_GAP;
 const rowStep = CARD_H + ROW_GAP;
 const setH = ROWS_PER_SET * rowStep;
 const totalW = COLS * colStep;
 
-const COL_SPEEDS = [60, 50, 70, 55, 65];
+const COL_SPEEDS = [90, 105, 85, 100, 95, 110, 88];
 
 interface Props {
   activeCollection: Collection;
@@ -30,9 +30,9 @@ interface Props {
 }
 
 export default function InfiniteCanvas({ activeCollection, onCollectionChange }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<(typeof postcards)[0] | null>(null);
 
+  // Global springy pan — no restrictions
   const rawPanX = useRef(0);
   const rawPanY = useRef(0);
   const panX = useMotionValue(0);
@@ -41,41 +41,65 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
   const springY = useSpring(panY, { stiffness: 80, damping: 18, mass: 1 });
 
   const isDragging = useRef(false);
+  const didDrag = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
   const lastTouch = useRef<{ x: number; y: number } | null>(null);
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest(".postcard-item")) return;
-    isDragging.current = true;
-    lastMouse.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  // Global mouse listeners on window so drag works everywhere
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      isDragging.current = true;
+      didDrag.current = false;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const dx = e.clientX - lastMouse.current.x;
+      const dy = e.clientY - lastMouse.current.y;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDrag.current = true;
+      rawPanX.current += dx;
+      rawPanY.current += dy;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      panX.set(rawPanX.current);
+      panY.set(rawPanY.current);
+    };
+    const onUp = () => { isDragging.current = false; };
 
-  const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging.current) return;
-    rawPanX.current += e.clientX - lastMouse.current.x;
-    rawPanY.current += e.clientY - lastMouse.current.y;
-    lastMouse.current = { x: e.clientX, y: e.clientY };
-    panX.set(rawPanX.current);
-    panY.set(rawPanY.current);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
   }, [panX, panY]);
 
-  const onMouseUp = useCallback(() => { isDragging.current = false; }, []);
-
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 1)
+  // Global touch listeners
+  useEffect(() => {
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 1)
+        lastTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || !lastTouch.current) return;
+      rawPanX.current += e.touches[0].clientX - lastTouch.current.x;
+      rawPanY.current += e.touches[0].clientY - lastTouch.current.y;
       lastTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  }, []);
+      panX.set(rawPanX.current);
+      panY.set(rawPanY.current);
+    };
+    const onEnd = () => { lastTouch.current = null; };
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length !== 1 || !lastTouch.current) return;
-    rawPanX.current += e.touches[0].clientX - lastTouch.current.x;
-    rawPanY.current += e.touches[0].clientY - lastTouch.current.y;
-    lastTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    panX.set(rawPanX.current);
-    panY.set(rawPanY.current);
+    window.addEventListener("touchstart", onStart);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onEnd);
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
   }, [panX, panY]);
-
-  const onTouchEnd = useCallback(() => { lastTouch.current = null; }, []);
 
   const collections: Collection[] = ["all", "spring", "summer", "autumn", "winter"];
 
@@ -85,17 +109,10 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
 
   return (
     <div
-      ref={containerRef}
       className="absolute inset-0 overflow-hidden"
       style={{ background: "#F0EDE6", cursor: isDragging.current ? "grabbing" : "grab" }}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
     >
+      {/* Springy canvas */}
       <motion.div
         style={{
           x: springX,
@@ -112,7 +129,6 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
           const x = col * colStep - totalW / 2 + CARD_W / 2;
           const yOffset = col % 2 === 1 ? -rowStep / 2 : 0;
 
-          // 2 full sets of ROWS_PER_SET cards each — seamless loop
           const colCards = Array.from({ length: ROWS_PER_SET * 2 }, (_, i) => {
             const postcard = filtered[(col * 7 + i * 3) % filtered.length];
             const seed = col * 100 + i;
@@ -144,21 +160,22 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                     width: CARD_W,
                     height: CARD_H,
                   }}
-                  onMouseDown={e => e.stopPropagation()}
-                  onClick={() => setSelected(postcard)}
+                  onClick={() => {
+                    if (!didDrag.current) setSelected(postcard);
+                  }}
                 >
                   <div
                     style={{
                       width: CARD_W,
                       height: CARD_H,
-                      borderRadius: 18,
+                      borderRadius: 16,
                       background: postcard.bg,
                       boxShadow: "0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)",
                       cursor: "pointer",
                       transition: "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease",
                       display: "flex",
                       alignItems: "flex-end",
-                      padding: 14,
+                      padding: 12,
                     }}
                     onMouseEnter={e => {
                       (e.currentTarget as HTMLDivElement).style.transform = "scale(1.06)";
@@ -171,7 +188,7 @@ export default function InfiniteCanvas({ activeCollection, onCollectionChange }:
                   >
                     <p style={{
                       color: postcard.textColor,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: "0.05em",
                       textTransform: "uppercase",
