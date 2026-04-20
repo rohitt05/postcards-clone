@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useRef } from "react";
 import { getCardById } from "@/lib/encodePostcard";
+import { decryptMessage, EncryptedMessage } from "@/lib/crypto";
 import Link from "next/link";
 
 function formatDate(): string {
@@ -15,7 +16,7 @@ function formatDate(): string {
 
 type PostcardData = {
   cardId: string;
-  message: string;
+  message: string; // JSON-encoded EncryptedMessage or legacy plaintext
   senderName: string;
   images: string[];
 };
@@ -35,7 +36,6 @@ function PhotoCarousel({ images, accent, bg }: { images: string[]; accent: strin
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
-      {/* Carousel scroll container */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -73,28 +73,22 @@ function PhotoCarousel({ images, accent, bg }: { images: string[]; accent: strin
         ))}
       </div>
 
-      {/* Left gradient fade */}
       <div style={{
         position: "absolute", top: 0, left: 0, bottom: 0, width: 56,
         background: `linear-gradient(to right, ${bg}cc, transparent)`,
         pointerEvents: "none", zIndex: 2,
       }} />
-
-      {/* Right gradient fade */}
       <div style={{
         position: "absolute", top: 0, right: 0, bottom: 0, width: 56,
         background: `linear-gradient(to left, ${bg}cc, transparent)`,
         pointerEvents: "none", zIndex: 2,
       }} />
-
-      {/* Bottom gradient fade into card content */}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: 64,
         background: `linear-gradient(to bottom, transparent, ${bg})`,
         pointerEvents: "none", zIndex: 2,
       }} />
 
-      {/* Dot indicators */}
       {images.length > 1 && (
         <div style={{
           position: "absolute", bottom: 10, left: 0, right: 0,
@@ -127,14 +121,36 @@ function ViewPostcard() {
   const id = params.get("id");
 
   const [data, setData] = useState<PostcardData | null>(null);
+  const [decryptedMessage, setDecryptedMessage] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) { setFetchError("No postcard found."); setLoading(false); return; }
+
     fetch(`/api/postcard?id=${id}`)
       .then(r => r.ok ? r.json() : r.json().then((e: { error?: string }) => Promise.reject(e.error ?? "Not found")))
-      .then((d: PostcardData) => setData(d))
+      .then(async (d: PostcardData) => {
+        setData(d);
+
+        // Try to parse message as encrypted payload
+        try {
+          const encrypted: EncryptedMessage = JSON.parse(d.message);
+          // Extract key from URL hash — hash is never sent to server
+          const hash = window.location.hash; // e.g. "#key=abc123"
+          const keyMatch = hash.match(/[#&]key=([^&]+)/);
+          if (keyMatch) {
+            const plaintext = await decryptMessage(encrypted, keyMatch[1]);
+            setDecryptedMessage(plaintext ?? "[Message could not be decrypted]");
+          } else {
+            // Key missing from URL — link may be incomplete
+            setDecryptedMessage("[Decryption key missing — please use the full link]");
+          }
+        } catch {
+          // Legacy plaintext message (postcards created before encryption was added)
+          setDecryptedMessage(d.message);
+        }
+      })
       .catch((e: string) => setFetchError(typeof e === "string" ? e : "Failed to load postcard."))
       .finally(() => setLoading(false));
   }, [id]);
@@ -160,7 +176,6 @@ function ViewPostcard() {
       overflow: "hidden",
     }}>
 
-      {/* Blurred full-screen bg */}
       {images[0] ? (
         <div style={{
           position: "fixed", inset: 0, zIndex: 0,
@@ -173,10 +188,8 @@ function ViewPostcard() {
       ) : (
         <div style={{ position: "fixed", inset: 0, zIndex: 0, background: "#1a1916" }} />
       )}
-      {/* Dark overlay */}
       <div style={{ position: "fixed", inset: 0, zIndex: 1, background: "rgba(0,0,0,0.38)" }} />
 
-      {/* Postcard */}
       <div style={{ width: "100%", maxWidth: 420, position: "relative", zIndex: 10 }}>
         <div style={{
           background: bg,
@@ -185,12 +198,10 @@ function ViewPostcard() {
           boxShadow: "0 16px 64px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.2)",
         }}>
 
-          {/* Photo carousel inside card */}
           {images.length > 0 && (
             <PhotoCarousel images={images} accent={accent} bg={bg} />
           )}
 
-          {/* Date */}
           <div style={{ padding: images.length > 0 ? "12px 22px 0" : "22px 22px 0" }}>
             <p style={{
               color: accent, opacity: 0.4, fontSize: 11, fontWeight: 700,
@@ -198,18 +209,16 @@ function ViewPostcard() {
             }}>{formatDate()}</p>
           </div>
 
-          {/* Message */}
-          {data.message && (
+          {decryptedMessage && (
             <div style={{ padding: "12px 22px 18px" }}>
               <p style={{
                 color: accent, fontSize: 15, lineHeight: 1.7,
                 fontStyle: "italic", opacity: 0.82, margin: 0,
                 whiteSpace: "pre-wrap",
-              }}>&ldquo;{data.message}&rdquo;</p>
+              }}>&ldquo;{decryptedMessage}&rdquo;</p>
             </div>
           )}
 
-          {/* Footer */}
           <div style={{
             padding: "12px 22px 20px",
             borderTop: `1px solid ${accent}12`,
@@ -232,7 +241,6 @@ function ViewPostcard() {
           </div>
         </div>
 
-        {/* Back link */}
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <Link href="/" style={{
             display: "inline-flex", alignItems: "center", gap: 6,

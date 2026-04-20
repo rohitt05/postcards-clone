@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Postcard } from "@/data/postcards";
 import { useState, useRef, useCallback } from "react";
 import { compressImage } from "@/lib/encodePostcard";
+import { encryptMessage } from "@/lib/crypto";
 
 interface Props {
   card: Postcard | null;
@@ -59,12 +60,17 @@ export default function PostcardModal({ card, onClose }: Props) {
     try {
       const compressed = await Promise.all(images.map(compressImage));
 
-      const res = await fetch('/api/postcard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // Encrypt the message client-side — key never leaves the browser
+      const messageToEncrypt = message.trim() || "";
+      const { encrypted, key } = await encryptMessage(messageToEncrypt);
+
+      const res = await fetch("/api/postcard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cardId: card.id,
-          message,
+          // Store ciphertext + iv, never the plaintext
+          message: JSON.stringify(encrypted),
           senderName: senderName.trim(),
           images: compressed,
         }),
@@ -72,14 +78,15 @@ export default function PostcardModal({ card, onClose }: Props) {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? 'Failed to save postcard');
+        throw new Error(data.error ?? "Failed to save postcard");
       }
 
       const { id } = await res.json();
-      setShareUrl(`${window.location.origin}/view?id=${id}`);
+      // Key goes in URL hash — never sent to server
+      setShareUrl(`${window.location.origin}/view?id=${id}#key=${key}`);
       setStep("share");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -396,7 +403,7 @@ export default function PostcardModal({ card, onClose }: Props) {
                     </div>
 
                     <p style={{ color: accent, opacity: 0.3, fontSize: 11, textAlign: "center", marginBottom: 20, lineHeight: 1.5 }}>
-                      Anyone with this link can view your postcard.
+                      Only someone with this exact link can read the message.
                     </p>
 
                     <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
