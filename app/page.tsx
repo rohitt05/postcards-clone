@@ -40,6 +40,7 @@ function PostcardsApp() {
 
         {/* Nav */}
         <nav className="pointer-events-auto flex items-center gap-5">
+          {/* Desktop: text link */}
           <a
             href="/about"
             className="hidden sm:block transition-colors duration-200 hover:text-ink text-ink/50"
@@ -47,8 +48,30 @@ function PostcardsApp() {
           >
             About
           </a>
-          {/* Decorative heart */}
-          <span style={{ color: "#C8896E", fontSize: 16, lineHeight: 1, opacity: 0.7 }}>♥</span>
+          {/* Mobile: heart is the about link — large tap target so canvas can't steal it */}
+          <a
+            href="/about"
+            className="sm:hidden flex items-center justify-center"
+            aria-label="About"
+            style={{
+              color: "#C8896E",
+              fontSize: 22,
+              lineHeight: 1,
+              opacity: 0.85,
+              minWidth: 44,
+              minHeight: 44,
+              touchAction: "manipulation",
+            }}
+          >
+            ♥
+          </a>
+          {/* Desktop decorative heart (non-interactive) */}
+          <span
+            className="hidden sm:inline"
+            style={{ color: "#C8896E", fontSize: 16, lineHeight: 1, opacity: 0.7 }}
+          >
+            ♥
+          </span>
         </nav>
       </div>
 
