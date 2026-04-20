@@ -6,16 +6,21 @@
 
 function b64encode(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  return btoa(String.fromCharCode(...bytes))
+  return btoa(String.fromCharCode(...Array.from(bytes)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=/g, "");
 }
 
-function b64decode(str: string): Uint8Array {
+function b64decode(str: string): ArrayBuffer {
   const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
   const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
-  return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer as ArrayBuffer;
 }
 
 export interface EncryptedMessage {
@@ -36,11 +41,11 @@ export async function encryptMessage(
     ["encrypt", "decrypt"]
   );
 
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ivBuffer = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plaintext);
 
   const cipherBuf = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: ivBuffer },
     key,
     encoded
   );
@@ -50,7 +55,7 @@ export async function encryptMessage(
   return {
     encrypted: {
       ciphertext: b64encode(cipherBuf),
-      iv: b64encode(iv),
+      iv: b64encode(ivBuffer),
     },
     key: b64encode(rawKey),
   };
